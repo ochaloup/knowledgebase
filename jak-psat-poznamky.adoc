@@ -1,0 +1,34 @@
+= Jak se vracet ke svým poznamkám
+
+:icons: font
+
+icon:bookmark[] https://www.slideshare.net/JanHoralk/jak-se-vracet-ke-svm-poznmkm
+
+icon:tags[] poznamky, rozvoj, kategorizace, pesonal.development, jopenspace
+
+== Main idea
+
+Jak se vracet k poznámkám z knih, článků, konferencí atp.
+Řešením je poznámky správně strukturovat.
+Přínosem je jednoduché vrácení se k tématu a rychlé oživení znalosti.
+
+== Details
+
+=== Jaká je doporučená struktura poznámek?
+
+* Nadpis a zdroj
+* Tagy (hesla) - formá 'kde, kdy, kdo, co...'
+* Shrnutí 3mi (pouze!) větami ve formátu: Problém - Řešení - Přínosy
+* Detaily, zajímavosti - formát Otázka - Odpověď
+
+=== Jak si dělat zápisky při čtení?
+
+Vždy si zaznamenávat pouze otázku, která vyjadřuje, co nás zaujalo nebo na kterou chceme odpovědět, nikdy ne výseky textu nebo se snažit o jeho přepis.
+
+=== Kde se to vzalo?
+
+Honza Horalík a jeho metoda prezentovaná na jOpenSpace 2019. Vychází z metody zaznamenávání poznámek z kurzů rychločtení NEANA od Davida Grubera (www.gruber.cz/tdp)
+
+=== Kdy a jak se k poznámkám vracet?
+
+Nechat si poznámky posílat do emailu (AWS lamdba funkce a EverNote) jednou denně poznámku.

@@ -1,0 +1,47 @@
+= Where Is My Cache? Architectural Patterns for Caching Microservices
+
+:icons: font
+
+icon:bookmark[] https://hazelcast.com/blog/architectural-patterns-for-caching-microservices/
+
+icon:tags[] java, in.memory.grid, hazelcast, caching
+
+== Main idea
+
+How to think about the applicaction cache design for the microservices.
+There are multiple approaches depending and the article list them.
+
+== Details
+
+=== What are the explained approches
+
+Embeddded, Embedded Distributed, Client-Server, Cloud, Sidecar, Reverse Proxy, Reverse-Proxy Sidecar
+
+=== What is Embedded?
+
+Your application has it's own cache that does not share with anybody else. E.g. `@Cacheable` in Spring.
+
+=== What is Embedded Distributed
+
+Embedded cache which is distributed over all applications in the cluster by some in-memory grid solution. E.g. HazelCast, Redis.
+
+=== What is the Client-Server
+
+There is a cache server as a third-party deployment and all applications connect to it with some client calls.
+
+=== What is the Cloud
+
+The same as client-server but the cache server is in cloud and there is need no dev-ops.
+
+=== What is the Sidecar
+
+Solution for the Kubernetes mainly. The same as Client-Server but the cache is managed as the sidecar.
+
+=== What is the Reverse Proxy
+
+NGnix loadbalancer puts a cache on the http request. If there was such then returns back immediatelly. Eviction from cache only with timeout. Application does not know about existence.
+
+=== What is the Reverse Proxy Sidecar
+
+Cache as for NGNix but it's a distributed cache in the Kubernetes as sidecar which returns immediatelly response. Not hitting the application.
+-> LoadBalancer -> Pod -> Cache SideCar -> Application
