@@ -29,6 +29,10 @@ Vždy si zaznamenávat pouze otázku, která vyjadřuje, co nás zaujalo nebo na
 
 Honza Horalík a jeho metoda prezentovaná na jOpenSpace 2019. Vychází z metody zaznamenávání poznámek z kurzů rychločtení NEANA od Davida Grubera (www.gruber.cz/tdp)
 
-=== Kdy a jak se k poznámkám vracet?
+=== Kdy si dělat poznánky?
+
+Jako tip je asi ideálně ráno, jako první věc, když člověk přijde do práce. Ráno ti nikdo nevezme.
+
+=== Jak se k poznámkám vracet?
 
 Nechat si poznámky posílat do emailu (AWS lamdba funkce a EverNote) jednou denně poznámku.
