@@ -1,0 +1,83 @@
+= Java garbage collection
+
+:icons: font
+
+icon:bookmark[] https://www.baeldung.com/jvm-garbage-collectors,
+                https://docs.oracle.com/cd/E13150_01/jrockit_jvm/jrockit/geninfo/diagnos/tuning_tradeoffs.html,
+                https://www.javainuse.com/java/permgen (TODO: use the image from here)
+
+icon:tags[] java, memory
+
+== Main idea
+
+Problem:   For languages like C the developer has to manage the memory allocation for his own and it's failure prone.
+Solution:  Language manages the memory for the developer automatically.
+Benefit:   Developer has less things to bother about and it's safer to memory related errors.
+
+== Details
+
+=== What is garbage collector (GC)?
+
+JVM manages memory on heap. It automatically allocates (when developer defines a variable)
+and deallocates (when it's not used anymore).
+GC has to track all variables, if they are active, and it frees memory for those which are not used anymore.
+
+Plus:
+
+* No manual allocation/deallocation is needed
+* No https://en.wikipedia.org/wiki/Dangling_pointer[dangling pointers]
+* https://en.wikipedia.org/wiki/Memory_leak[Memory leak] management (though it's not a full proof solution)
+
+Cons:
+
+* CPU for tracking the active memory areas is needed
+* Can't be that effective as proper manual memory allocation/deallocation
+* Some GC may need to stop the application for a while to properly manage the garbage collection (stop the world issues)
+
+=== How the process of garbage collection works?
+
+In high level it uses two phases.
+
+* *Mark* - identification of memory which is in use
+* *Sweep* - removes memory for objects identified as unused in "mark" phase
+
+The "third" phase is the memory compaction. When the memory is just freed
+it may be fragmented. Compation is to move the used memory parts to one location
+to form a consistent memory area. The same is then true for the free memory space.
+The allocation work is easier in non-fragmented memory (easy to search for a space big enough).
+
+There are several implementations of the garbage collectors in Java.
+
+Every implementation balances the trade-off of 'pause time vs throughput'.
+Shorter pause time means more CPU time is needed for GC to work in parallel with the application
+program and the app program has not so many CPU cycles for its work.
+On the other hand the application throughput means CPU is used in application
+but then there is more work for GC when necessary and the program is usually stopped for a longer time.
+
+The other GC trade-off is the 'performance vs. memory footprint'.
+
+
+=== When is the garbage collection started?
+
+It's started in general when there is not enough space for application program to run.
+The developer usually defines maximum of memory the Java is permitted to occupy.
+
+* `-Xmx` : set maximum Java heap size
+
+The particular implementation of GC then defines e.g. some ratio of used to unused memory
+or a time schedule when the GS is run.
+
+=== Serial Garbage Collector
+
+A single thread for GC is used. All application threads are stopped during GC.
+
+Started with `java -XX:+UseSerialGC`
+
+=== Parallel Garbage Collection
+
+Called a "throughput collector". Uses multiple threads for managing the heap space.
+It also stops the application program.
+
+Started with `java -XX:+UseParallelGC`
+
+===

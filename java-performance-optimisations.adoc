@@ -1,0 +1,136 @@
+= Ideas for simple performance optimizations
+
+:icons: font
+
+icon:bookmark[] https://blog.jooq.org/2015/02/05/top-10-easy-performance-optimisations-in-java/
+
+icon:tags[] java, programming, performance
+
+== Main idea
+
+Problem:   Writing Java program performance is not an easy task.
+Solution:  Using these several points may help your program to run faster.
+Benefit:   The program runs faster (but they are not necessarily more readable)
+
+== Details
+
+=== Why not to use string concatenation?
+
+JVM creates `StringBuilder` in the background. If you concatenate multiple times
+multiple `StringBuilder`+s are created. Mutliple objects consumes more memory.
+
+[NOTE]
+====
+do not use http://docs.oracle.com/javase/8/docs/api/java/lang/StringBuffer.html[`StringBuffer`])
+====
+
+
+=== Why to avoid regular expressions?
+
+They are expensive. For performance avoid at all cost.
+If really needed at least cache the http://docs.oracle.com/javase/8/docs/api/java/util/regex/Pattern.html[`Pattern`]
+reference instead of compiling it afresh all the time.
+
+[NOTE]
+====
+beware variety of JDK `String` method use regular expressions like `String.replaceAll()` or `String.split()`
+====
+
+
+=== Why not to use iterator?
+
+[source, java]
+----
+for (String value : strings) {
+    // Do something useful here
+}
+----
+
+Every time you run into this `Iterable` loop you will create a new Iterator instance.
+If you’re using an `ArrayList`, this is going to be allocating an object with 3 ints on your heap.
+
+On hot code path it's often better to use index-based iteration instead.
+
+
+=== Why to use primitive types?
+
+An `Object` requires a data on heap. That means GC.
+
+[source,java]
+----
+// Three heap objects!
+Integer[] i = { 1337, 424242 };
+
+// One heap object.
+int[] i = { 1337, 424242 };
+----
+
+[NOTE]
+====
+Exception: `boolean` and `byte` have few enough values to be cached entirely by the JDK.
+
+But! only if auto-boxed or with `<Type>.valueOf()`.
+Do not call constructor on wrapper types, unless you really want a new instance.
+====
+
+
+=== Why to avoid recursion?
+
+You may be wasting a lot of stack frames for something that could be implemented
+with a few local variables.
+
+[NOTE]
+====
+Some languages has an tail-recursing optimization, especially functional programming languages,
+that avoids the trouble with stack frames.
+====
+
+
+=== Why to use `entrySet()`
+
+When iterating over `Map` use
+
+[source,java]
+----
+for (Entry<K, V> entry : map.entrySet()) {
+    K key = entry.getKey();
+    V value = entry.getValue();
+}
+----
+
+rather than
+
+[source,java]
+----
+for (K key : map.keySet()) {
+    V value : map.get(key);
+}
+----
+
+With the later one you proceed unnecessary map access operations with the `map.get(key)`.
+
+
+=== Why to consider using `EnumSet` and `EnumMap`
+
+These are types when you know number of possible keys in advance.
+They are good for example for configuration map - global for whole application
+with parameters known at the application startup.
+
+Java compiler generates constant ordinals for these types
+and access to them is faster then with `HashMap` where `hashCode()` and `equals()`
+has to be used on every access.
+
+
+=== Why and how to optimize `hashCode()` and `equal()`
+
+`hashCode()` and `equal()` are particurarly important for `HashMap` accesses.
+`HashMap` uses first hash code to define a bin and when multiple records
+goes to the same bin then the `equal()` is used to differentiate them
+and records are put to a linked list (or tree for a bigger number of items).
+
+Rule of thumb: try to find the simplest and fastest possible `hashCode()` method.
+
+Abort every `equals()` method early, if:
+
+* `this == argument`
+* `this` "incompatible type" argument (use `instanceof`, this condition includes `argument == null`)

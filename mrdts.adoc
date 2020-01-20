@@ -1,0 +1,36 @@
+= Mergeable replicated data types
+
+:icons: font
+
+icon:bookmark[] https://blog.acolyer.org/2019/11/25/mergeable-replicated-data-types-part-i/, http://kcsrk.info/papers/oopsla19-mrdt.pdf
+
+icon:tags[] distributed.systems, crdt
+
+== Main idea
+
+A new way of automatically mergeable data structures that could be used for conflict resolution in distributed systems. They are named as MRDTS.
+The idea is similar to CRDT but a merge function is used to get a consistent outcome.
+It defines more generic, easier for a developer used data structures.
+
+== Details
+
+=== How merge function works?
+
+* Every data structure needs it's own.
+* It works based on the three-way-merge function.
+* Example of the counter - multiplication does not commute, ie. `(-1),(*2)!=(*2),(-1)`
+** say we start with number 5: should we take `5*2-1` or `5-1*2`
+** we found the lowest common ancestor, which is `5` and we come to merge states we get: `5 -> *2 -> 10`;  `5 -> -1 -> 4`
+** the merge function is `let merge l v1 v2 = l + (v1 - l) + (v2 - l)` => 5 + (10 - 5 ) + (4 - 5) == 9
+
+=== How the merge function is defined in general?
+
+* Example shows the three-way merge principle but there is a generic process defined - in-revertible relational specification
+* This consists of two functions
+** _abstraction function_ : maps the values of a type to the relational domain
+** _concretization function_ :  maps back again
+(see example of queue in the morning paper article)
+
+=== What are the distributed systems attributes?
+
+* They do not guarantee linearizability but they do guarantee convergence.

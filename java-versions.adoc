@@ -1,0 +1,138 @@
+= Features brought by different Java releases
+
+:icons: font
+
+icon:bookmark[] https://www.youtube.com/watch?v=0RegttLUXeU, https://www.youtube.com/watch?v=-U8JFE8GZ04, https://vimeo.com/289852355,
+  http://karunsubramanian.com/websphere/one-important-change-in-memory-management-in-java-8/,
+  https://www.tutorialspoint.com/java8/java8_datetime_api.htm
+
+icon:tags[] java, programming
+
+== Main idea
+
+What are new features introduced by different Java version releases.
+
+Problem:   What are the new features came with particular Java release.
+
+== Details
+
+=== What are new changes in Java 7?
+
+Launched 07/2011
+
+* `switch` cause works with `String`: `switch (token) { case ("one"): ...`
+* `try (resource)`
+* `try-catch` with multiple exception types: `try { ... } catch (NullPointerException | IllegalStateException e) { ... }`
+* suppressed exceptions added: `Exception.addSuppressed(t)`
+* added diamond operator `<>` for generics on right side of assignment: `List<String> l = new ArrayList<>();`
+* NIO 2.0 with `java.nio.file` package
+* Fork/Join framework introduced
+* G1 garbage collector
+* `invokedynamic` bytecode instruction:  facilitates the implementation of dynamic languages (for the JVM)
+
+
+=== What are new changes in Java 8?
+
+Launched 03/2014
+
+ * Lamda: `Callable<String> c = () -> "done"`
+ * Streams
+ * Interface default and static methods
+ * Functional interfaces - a single functionality to exhibit by interface. `@FunctionalInterface` means only(!) one unimplemented interface method defined.
+ * Method references: `System.out::println`
+ * `Optional` class
+ * repeating annotations (the same annotation may be used multiple times)
+ * time API was enhanced
+ ** old one was poorly designed with no thread-safety and difficulty with time zones
+ ** APIs:  `java.time.LocalDate/LocalTime` - when timezone is not needed,
+           `java.time.ZonedDateTime` - when timezone is considered,
+           `java.time.temporal.ChronoUnit` - replacing integer values of old API,
+           `java.time.Duration/Period` - deals with date/time based amount of time
+* JavaScript Nashorn engine
+* PermGen was renamed to Metaspace
+** Metaspace has an unlimited default maximum size
+** Metaspace is **not** part of Heap, it's part of native (process) memory
+** PermGen default max size: 64 MB on 32-bit, 82 MB on 64-bit
+
+
+=== What is in Java 9?
+
+Launched 09/2017
+
+* Jigsaw: java modularity
+
+* java 9 - new APIs things
+** List.of(), Map.of()
+** Stream.'takeWhile(x -> x < 5)', 'dropWhile(...)'
+** null could be part of the Stream: Stream.ofNullable(null), Stream.ofNullable(null).count() == 0
+** CompletableFuture - completeOnTimeout(<default-value-when-timeouted>, TIME); orTimeout(TIME) : returns TimeoutException on cf.get()
+*** copy() to copy existing completable future
+** StackWalker (prior to java9: new Throwable().getStackTrace()); StackWalker.getInstance().walk(<lamda-expression-on-stream>)
+** ProcessHandle (prior to java9: new ProcessBuilder().command("jps").start()); ProcessHandle.current().pid() [.info(),.commandLine()]; ProcessHandle.allProcesses()
+*** new ProcessBuilder().command("sleep", "30").toHandle().onExit().thenAccept(System.out::println)
+*** new ProcessBuilder().startPipeline(...)
+** new HTTP2 client
+
+=== What is new in Java 10?
+
+Launched 03/2018
+
+* local-variable type interference: `var users = new ArrayList<User>()` (project Amber)
+** part of project Amber
+** `var` is a reserved typed name, it's not a `keyword`, 'var' may be still used as variable name
+** only type interference, it's not about dynamic types
+* application class-data sharing: multiple JVMs to share loaded classes via shared memory
+* G1 is default GC
+
+Some API "features"
+
+* `list.stream().collect(toUnmodifiable())`
+* `Reader.nullReader(); InputStream.nullInputStream(); OutputStream.nullOutputStream()`: Java way of /dev/null
+* a tuple type could be created in local scope with hack now:: `var x = new Object() {int a=1; int b=2;}; System.out.println(x.a);`
+
+
+=== What is new in Java 11?
+
+Launched 09/2018
+
+* single-file source-code programs: you may run java file directly like `java HelloWorld.java`
+* reactive HTTP/2 client
+* Epsilon GC
+
+Some API "features"
+
+* `list.toArray(Integer[]::new)`
+* `String.repeat(int); String.lines() [splitting by newline]; String.strip(); String.isBlank() (uses Character.isWhitespace())`
+* `Path.of("/tmp/test"); Files.writeString(path, "string to be written"); Files.readString(path)`
+
+=== What is new in Java 12?
+
+Launched 03/2019
+
+* switch expressions (techical preview): `int numLetters = switch (day) { case MONDAY, FRIDAY -> 6;}` (no `break`, `switch` returns a value)
+* Shedonah GC
+* G1 enhancements (promptly return unused memory, abortable mixed collections)
+
+=== What is new in Java 13?
+
+Launched 09/2019
+
+* Text block: multiple line string defined with backtick \`
+* switch expression (some changes, e.g. switch expression returning value via `yield` instead of `break`)
+* ZGC GC
+
+=== JDK "future" projects
+
+* Amber: smaller features, aimed for developer productivity (e.g. local-variable type interference)
+** raw string literals (JEP 326): string over multiple lines and no escaping special characters, `String` will be defined backtick (\`)
+** switch expressions (JEP 325): `int numLetters = switch (day) { case MONDAY, FRIDAY -> 6;}` (no `break`, `switch` returns a value)
+** pattern matching (JEP 305): `Object value = ...; String formatted = switch (value) { case Integer i -> String.format("%d", i);}`
+** records: compiler will generate constructor, destructor, equals/hashCode/toString/accessors (no boilerplate for data carriers, as https://projectlombok.org[Lombok] does with `@Data`)
+* Valhalla: generic specialization and value types
+** value types: make a Java object being a primitive type : `public value Range { private int id; }` (the `value` makes the `Range` primitive - no memory indirection, no `Object` header, immutable)
+** generic specialization: `List<int> ids = new ArrayList<>()` will be backed by not-boxed `int[]` array (faster, less memory consumption)
+* Loom: fibers and continuations
+** fibers instead of threads: a fiber is managed by JVM (not by OS), has low memory foot print (similar to `go-lang routines`)
+** continuation: low-level API manages how fiber store and restores the state on rescheduling to the thread
+* Metropolis: graal and ahead-of-time (AOT) compilation
+* Panama: better interaction with non-Java code (enhanced JNI)

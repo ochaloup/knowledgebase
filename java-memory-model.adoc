@@ -1,0 +1,113 @@
+= Java Memory Model
+
+:icons: font
+
+icon:bookmark[] https://www.ibm.com/developerworks/library/j-jtp02244/, https://www.ibm.com/developerworks/library/j-jtp03304/
+
+icon:tags[] java, programming, concurrency
+
+== Main idea
+
+Problem:   What is purpose of Java Memory Model (JMM), why different processors may cause data race condition as having a different conception of visibility for variables among parallel threads
+Solution:  On JSR 133 Java fixed issues of visibility of variables among parallel threads and program behaves in the same way on any architecture.
+Benefit:   Keywords `volatile`, `synchronized` and `finalize` are defined precisely in spec and the developer may count on it.
+
+== Details
+
+=== What is purpose of Java Memory Model?
+
+Java tries to be platform-independent. Java Memory Model should abstract the behaviour
+of visibility of variables over concurrently running threads.
+
+For example not all multiprocessor systems exhibit _cache coherency_; if one processor has an updated value of a variable in its cache,
+but one which has not yet been flushed to main memory, other processors may not see that update.
+
+The memory model describes the relationship between the variables in program
+and the low-level details of storing and retrieving them from memory.
+
+Various processor provides optimization and reorders code to run faster.
+The processor may reorder the instruction until Java developer explicitly defines otherwise.
+That's where `volatile` and `synchronized` keywords come to play.
+
+[NOTE]
+====
+By contrast the C/C++ language has no explicit memory model and the code
+inherits the model prescribes by the platform/processor.
+That means the concurrent C program may run correctly on one machine
+and may fails on the other one.
+====
+
+
+=== What was the problem of Java Memory Model befor JSR 133
+
+The spec was not clear on reordering rules for processor architecture
+and serious problems can sneak into the concurrently running code.
+Then program may work correctly on one platform and start failing on the other one.
+
+
+==== Problem #1: final keyword guarantees
+
+Final objects defined during instance initialization that were defined with `final`
+`private final Object obj = ...` could not be initialized correctly on concurrent threads.
+
+Because of potential delays in propagating changes in memory writes from one thread to another,
+there was a possible race condition that would allow a thread to first see one value for an immutable object,
+and then at some later time see a different value.
+
+==== Problem #2: reordering volatile and non-volatile variables
+
+Volatile reads and writes, however, were totally ordered across threads
+(the compiler or cache cannot reorder volatile reads and writes with each other).
+But JMM did allow volatile reads and writes to be reordered with respect to ordinary variable reads and writes.
+Which means `volatile` flags cannot be used as an indication of what operations have been completed.
+
+The well-known example is the "double-check locking" that didn't work even when written with `volatile` keyword
+
+[source,java]
+----
+class SomeClass {
+  private volatile Resource resource = null;
+  public Resource getResource() {
+    if (resource == null) {
+      synchronized {
+        if (resource == null)
+          resource = new Resource();
+      }
+    }
+    return resource;
+  }
+}
+----
+
+=== How the memory model was fixed with JSR 133
+
+The memory model defines semantics for `volatile`, `synchronized`, and `final`
+that make guarantees of visibility of memory operations across threads.
+
+The `volatile` now defines that reads and writes of volatile fields would be made directly to main memory,
+instead of to registers or the local processor cache.
+And that processor has to preserve the order of actions for `volatile`
+variables that way it may be used as an indication of what operations have been completed
+(e.g. some resource was initialized already).
+
+It's said precisely that
+
+* Each action in a thread happens-before every action in that thread that comes later in the program order
+* An unlock on a monitor happens-before every subsequent lock on that same monitor
+* A write to a `volatile` field happens-before every subsequent read of that same `volatile`
+* A call to `Thread.start()` on a thread happens-before any actions in the started thread
+* All actions in a thread happen-before any other thread successfully returns from a `Thread.join()` on that thread
+
+[NOTE]
+====
+The double-check locking works thread-safety after JSR 133 was implemented (JDK5)
+====
+
+[NOTE]
+====
+The `volatile` was defined precisely but it's not said that should be used for free
+with a good performance as `volatile` is now half-synchronized operation.
+====
+
+The JSR 133 provides a guarantee of initialization safety. As long as an object is properly constructed,
+then all threads will see the values for its final fields that were set in its constructor.

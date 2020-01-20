@@ -8,14 +8,14 @@ icon:tags[] java, in.memory.grid, hazelcast, caching
 
 == Main idea
 
-How to think about the applicaction cache design for the microservices.
+How to think about the application cache design for the microservices.
 There are multiple approaches depending and the article list them.
 
 == Details
 
-=== What are the explained approches
+=== What are the explained approaches?
 
-Embeddded, Embedded Distributed, Client-Server, Cloud, Sidecar, Reverse Proxy, Reverse-Proxy Sidecar
+Embedded, Embedded Distributed, Client-Server, Cloud, Sidecar, Reverse Proxy, Reverse-Proxy Sidecar
 
 === What is Embedded?
 
@@ -39,9 +39,9 @@ Solution for the Kubernetes mainly. The same as Client-Server but the cache is m
 
 === What is the Reverse Proxy
 
-NGnix loadbalancer puts a cache on the http request. If there was such then returns back immediatelly. Eviction from cache only with timeout. Application does not know about existence.
+NGnix loadbalancer puts a cache on the HTTP request. If there was such then returns back immediately. Eviction from cache only with timeout. Application does not know about existence.
 
 === What is the Reverse Proxy Sidecar
 
-Cache as for NGNix but it's a distributed cache in the Kubernetes as sidecar which returns immediatelly response. Not hitting the application.
+Cache as for NGNix but it's a distributed cache in the Kubernetes as sidecar which returns immediately response. Not hitting the application.
 -> LoadBalancer -> Pod -> Cache SideCar -> Application

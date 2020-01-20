@@ -1,0 +1,13 @@
+= Java memory
+
+:icons: font
+
+icon:bookmark[] https://vimeo.com/364039638
+
+icon:tags[] java, memory
+
+== Main idea
+
+Definition:   What are memory areas Java use when running
+
+== Details

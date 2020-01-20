@@ -1,0 +1,73 @@
+= Introduction to Fork/Join framework/pool
+
+:icons: font
+
+icon:bookmark[] https://www.logicbig.com/tutorials/core-java-tutorial/java-multi-threading/fork-and-join.html
+
+icon:tags[] java, programming, concurrency
+
+== Main idea
+
+Problem:   How to efficiently do parallel execution where tasks are divided among multiple cores.
+Solution:  Fork/Join framework is capable to steal work (tasks) from other cores when being idle and pools of other cores are full.
+Benefit:   Work is done faster and cores do not slack off.
+
+== Details
+
+=== What is work stealing algorithm?
+
+A scheduling strategy where a thread may steal a work from other threads
+when it has finished its own tasks. When the core has no work then it may
+assign a task from another overloaded processor.
+
+=== How the Fork/Join pool works?
+
+Fork/Join is a thread pool where every task is monitored if it works long time.
+If yes then it forks - splits/decomposes - the task (ideally half of the work)
+and the pushes it to parent pool for other threads may take the decomposed task up (to steel it).
+Then the results are joint - the results of tasks are combined.
+That way the work is recursively split to more granular parts, they are processed
+in parallel and then recombined at the end.
+
+=== How API in Java looks like?
+
+Java from Java version 7 comes with API that makes possible this to be implemented.
+
+There is https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ForkJoinPool.html[`ForkJoinPool`]
+which implements https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ExecutorService.html[`ExecutorService`].
+The `ForkJoinPool` accepts tasks which are subclasses of https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/ForkJoinTask.html[`ForkJoinTask`].
+
+To submit/invoke main task we have to call one of these methods
+
+* `invoke(ForkJoinTask)`: invokes and synchronously waits to finish
+* `execute(ForkJoinTask)`: asynchronous call with no return value
+* `submit(ForkJoinTask)`: asynchronous call with `Future` returned
+
+
+`ForkJoinTask` is an abstract class represents a task with ability to fork and join itself. These are methods implemented in the abstract class by JDK.
+
+* `fork()`: submits to pool to run asynchronously, developer calls the  method on the new task instance which he wants to split from a main task
+* `join()`: the method blocks to return result of the computation of the forked task instance
+
+The developer then extends one of the subclasses of the `ForkJoinTask`, he usually implements method `protected abstract V compute()`
+and uses the `fork()` and `join()` methods inside of the `compute()` implementation.
+
+=== Where is used in Java?
+
+https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/stream/package-summary.html[Java streams] uses by default
+the Fork/Join pool on parallel processing.
+
+By default the pool is `ForkJoinPool.commonPool()`. The parallelism of the pool
+is defined `Runtime.getRuntime().availableProcessors() - 1` and can be
+found by call `ForkJoinPool.commonPool().getParallelism()`.
+The `commonPool` is shared across entire application.
+
+The developer may decide to use his own ForkJoin pool
+
+[source,java]
+----
+Callable<Integer> task = () -> IntStream.range(0, 1_000_000_000).parallel() ...
+
+ForkJoinPool pool = new ForkJoinPool(POOL_SIZE);
+int result = pool.submit(task).get();
+----
