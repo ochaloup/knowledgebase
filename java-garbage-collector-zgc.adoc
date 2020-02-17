@@ -1,0 +1,75 @@
+= Java garbage collector ZGC
+
+:icons: font
+
+icon:bookmark[] https://www.baeldung.com/jvm-zgc-garbage-collector
+
+icon:tags[] java, memory, gc
+
+== Main idea
+
+Problem:   Parallel and serial collectors stops the world unpredictable. G1 still requires stop-the-world pause times.
+Solution:  Having a garbage collector which is capable to run with as small as possible stop-the-world pause times and being able to work on huge heaps.
+Benefit:   Application may run more smoothly without worrying about GC pause times.
+
+== Details
+
+=== What are the properties that ZGC has?
+
+* capable to manage huge heaps
+* pause times are short (won't exceed 10ms)
+* pause times do not increase with size of heap (number of live objects)
+
+=== What are the characteristics of ZGC?
+
+* concurrent (runs while the application threads run)
+* region-based
+* compacting
+* NUMA-aware (every core has got own separated memory for its processing)
+* using colored pointers
+* using load barriers
+
+=== How ZGC works?
+
+As any other GC the ZGC needs to find objects for garbage collecting by marking them first
+&ndash; it uses *colored pointers* to mark the object as a garbage (ZGC uses the `marked0` and `marked1` metadata bits for marking.)
+When objects are marked for GC then it runs *relocation* to compact the heap memory
+and get rid of the garbage.
+
+=== How marking works?
+
+Marking works in three phases
+
+* finding the root references (the ones which are starting points to access heap - e.g. local variables, static fields...), it's stop-the-world phase
+* traversing object graphs and finding all live objects (using *colored pointers* to mark live objects)
+* handling edge cases (e.g. weak references), it's stop-the-world phase
+
+=== What is principle of colored pointers?
+
+GC needs, first, to mark non-living objects in memory and then they are garbage collected (in the next phase).
+This means there is created a set of the objects for garbage collection. Some auxiliary
+data structure needs to be created normally - e.g. some map which contains addresses with "free to collect" objects.
+
+But ZGC has got nothing like this. It uses the pointers itself to store information about state of the object.
+ZGC works only for 64 bit processors. The 42 bits (up to 4TB address memory) for addressing memory
+and then 4 bits for marking (coloring) the state of the object that the pointer points to.
+
+* `finalizable bit` – the object is only reachable through a finalizer
+* `remap bit` – the reference is up to date and points to the current location of the object (see relocation)
+* `marked0` and `marked1` bits – these are used to mark reachable objects
+
+image::images/garbage-collector-zgc-pointer.png[]
+
+=== How relocation works?
+
+Relocation consists of two phases.
+
+In a concurrent phase object references good for *relocation* are placed into the *relocation set*.
+During stop-the-world phase all root references are relocated and their references are updated.
+Then the concurrent phase relocate rest of the objects. It stores the mapping between the old and new addresses in the *forwarding table*.
+The rest of the references are updated during next(!) marking phase.
+
+=== What is principle of load barriers?
+
+Load barrier is a piece of code which is executed at time when an object accesses
+its reference. When it takes the pointer and accesses the memory with a live object.

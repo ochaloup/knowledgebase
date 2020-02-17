@@ -4,9 +4,12 @@
 
 icon:bookmark[] https://www.baeldung.com/jvm-garbage-collectors,
                 https://docs.oracle.com/cd/E13150_01/jrockit_jvm/jrockit/geninfo/diagnos/tuning_tradeoffs.html,
-                https://www.javainuse.com/java/permgen (TODO: use the image from here)
+                https://www.journaldev.com/2856/java-jvm-memory-model-memory-management-in-java,
+                https://www.infoq.com/presentations/JVM-Performance-Tuning-twitter-QCon-London-2012,
+                http://www.informit.com/articles/article.aspx?p=2496621&seqNum=2,
+                http://www.informit.com/articles/article.aspx?p=2496621&seqNum=4
 
-icon:tags[] java, memory
+icon:tags[] java, memory, gc
 
 == Main idea
 
@@ -41,7 +44,7 @@ In high level it uses two phases.
 * *Mark* - identification of memory which is in use
 * *Sweep* - removes memory for objects identified as unused in "mark" phase
 
-The "third" phase is the memory compaction. When the memory is just freed
+The "third" phase is the memory *compation*. When the memory is just freed
 it may be fragmented. Compation is to move the used memory parts to one location
 to form a consistent memory area. The same is then true for the free memory space.
 The allocation work is easier in non-fragmented memory (easy to search for a space big enough).
@@ -56,6 +59,7 @@ but then there is more work for GC when necessary and the program is usually sto
 
 The other GC trade-off is the 'performance vs. memory footprint'.
 
+image::images/java-garbage-collection-memory-diagram.png[]
 
 === When is the garbage collection started?
 
@@ -71,13 +75,28 @@ or a time schedule when the GS is run.
 
 A single thread for GC is used. All application threads are stopped during GC.
 
-Started with `java -XX:+UseSerialGC`
+Started with `-XX:+UseSerialGC`
 
-=== Parallel Garbage Collection
+image::images/java-garbage-collector-serial.jpg[]
 
-Called a "throughput collector". Uses multiple threads for managing the heap space.
-It also stops the application program.
+=== Parallel Collector
 
-Started with `java -XX:+UseParallelGC`
+Called a "throughput collector" because it uses multiple CPUs to speed up the GC performance.
+Uses multiple threads for scanning over the heap.
+It also stops the application program threads during GC. The difference to Serial GC is that multiple GC threads are run to finish the GC faster.
 
-===
+Started with `-XX:+UseParallelGC`
+
+image::images/java-garbage-collector-parralel.jpg[]
+
+=== Concurrent Mark Sweep Collector (CMS)
+
+The young generation is run the similar way as Parallel GC with stopping application threads.
+But running the old (tenured) generation works in parallel with the application threads
+(the image below refers to garbage collection of old generation).
+The application threads are stopped but just for short times when marking has to be processed.
+The sweeping part is done in parallel with the application threads working concurrently.
+
+Started with `-XX:+UseConcurrentMarkSweepGC`
+
+image::images/java-garbage-collector-cms.jpg[]

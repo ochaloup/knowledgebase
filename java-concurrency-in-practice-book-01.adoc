@@ -1,0 +1,112 @@
+= Java Concurrency in Practice (chapter 1 and 2)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Main idea
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming
+
+== Chapter 1
+
+=== What are the properties that the concurrent program needs to consider?
+
+The concurrent programs need to care about correctness/safety and liveness.
+
+Safety means that program runs correctly even when the functionality is run in parallel threads
+(thread safety) and liveness refers to fact that program will eventually get to the result.
+
+== Chapter 2
+
+=== What is in core of writing thread-safe program?
+
+The core of the thread-safe program is about managing *state*, in particular a shared (amongst multiple threads) mutable state.
+
+Whenever one than one thread accesses a given state variable, and one of them might write to it,
+they all have to coordinate their access to it using *synchronization*.
+
+=== What are java primitives connected with term *synchronization*?
+
+* synchronized keyword (provides exclusive locking)
+* volatile variables
+* explicit locks
+* atomic variables
+
+=== What is the thread-safety?
+
+In core of thread-safety is the concept of *correctness*.
+
+Correctness means that a class conforms to its specification. A good specification
+defines invariants constraining an object’s state and postconditions describing the
+effects of its operations.
+
+We usually don't have adequate specification so we can say more loosely that we know that
+single-threaded program is correct as we can see it.
+Multithreaded program is cannot be thread-safe if the single threaded is not.
+We can specify the thread-safety that the multithreaded program then can't break the correctness
+more that the single-threaded did.
+
+=== What is atomicity?
+
+An action that executes as a single indivisible operation.
+
+== What is a lost update?
+
+An issue for multithreaded programs where one thread loads a state, meanwhile other
+thread loads a state then the first one makes an operation and writes the updated state
+back to memory.
+The second thread then calculates something based on the old loaded state and write
+it to memory. The calculation of the first thread is lost.
+
+=== What is race condition?
+
+A race condition occurs when the correctness of a computation depends
+on the relative timing or interleaving of multiple threads by the runtime
+&ndash; when getting the right answer relies on lucky timing.
+
+=== How to specify an compound action?
+
+The compound action is an operation that consists from multiple actions.
+This means the operation is not atomic (indivisible). Then interleaving threads
+may process the actions arbitrarily and race condition may occur.
+
+To ensure thread safety, *check-then-act* operations (like lazy initialization where we check for `if null then create`)
+and *read-modify-write* operations (like increment where we update the state with an counter increment)
+must always be atomic.
+
+=== What is intrinsic lock?
+
+It's an built-in locking mechanism enforcing atomicity which is determined with keyword `synchronized`.
+The intrinsic locks are called *monitor locks* as well.
+
+Intrinsic locks in Java act as *mutexes* (or mutual exclusion locks).
+If one thread holds the lock then all other have to wait (blocked with processing)
+until the lock is released. If the thread never releases the lock then the second
+thread waits forever.
+
+A *synchronized method* is a shorthand for a synchronized block that spans an entire method body
+and whose lock is the object on which the method is being invoked.
+*Static synchronized methods* use the Class object for the lock.
+
+.synchronized block locking on explicit object named 'lock'
+[source,java]
+----
+synchronized (lock) {
+  // Access or modify shared state guarded by lock
+}
+----
+
+=== What reentrancy means?
+
+When a thread holds the lock then other thread has to wait for it being released.
+But if the same thread, as holding the lock, tries to squire the lock it succeeds.
+That's reentrancy.
+
+Reentrancy means that lock is acquired per-thread basis rather than per-invocation
+(default POSIX thread mutexes - pthreads - are acquired per-invocation).
+
+Reentrancy is implemented by having a counter associated to each lock. On lock acquisition
+the counter is increased. When the counter of the lock lock is decreased to zero lock is released.

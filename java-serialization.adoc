@@ -1,0 +1,104 @@
+= Java Serialization
+
+:icons: font
+
+icon:bookmark[] https://www.geeksforgeeks.org/serialization-in-java,
+                https://www.baeldung.com/java-serialization,
+
+
+icon:tags[] java, programming, serialization
+
+== Main idea
+
+Problem:   How to transfer a living instance of an Object over the wire
+Solution:  The Object instance has to serialize data to a byte array
+Benefit:   Object data may be save to a file or passed to a messaging system or over the wire
+
+== Details
+
+=== How Java serialization works?
+
+It automatically creates a byte stream in platform independent way.
+A Class that is said to be prepared for serialization implements the marking interface `java.io.Serializable`.
+
+The instance is serialized by using `void java.io.ObjectOutputStream.writeObject(Object obj)` method.
+The byte array is deserialized by using `Object java.io.ObjectInputStream.readObject()` method.
+
+Java specifies a default behaviour how to serialize the types. If there is no special need
+the developer does not need to care more about.
+
+=== What to know when using Java Serialization
+
+1. If parent implements `Serializable` then child is automatically `Serializable` too (but not vice-versa)
+2. `Static` and `transient` data members are not saved via Serialization process.
+3. Constructor of object is never called when an object is deserialized.
+4. All Objects which are data members (the associated objects) must be implementing `Serializable` interface,
+   otherwise `NotSerializableException` is thrown.
+
+=== How to customize way how the Object instance is serialized.
+
+The Class may implement methods `private void writeObject(ObjectOutputStream out) throws IOException`
+and `private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException`.
+If they are defined for the Class then they are called instead of the automatic process of serialization.
+The developer may change the behaviour as he wants.
+
+As an example how to use the default behaviour and plug in something more:
+
+[source,java]
+----
+private void writeObject(ObjectOutputStream oos) throws IOException {
+    oos.defaultWriteObject();
+    oos.writeObject(address.getHouseNumber());
+}
+
+private void readObject(ObjectInputStream ois) throws ClassNotFoundException, IOException {
+    ois.defaultReadObject();
+    Integer houseNumber = (Integer) ois.readObject();
+    Address a = new Address();
+    a.setHouseNumber(houseNumber);
+    this.setAddress(a);
+}
+----
+
+=== What is `SerialVersionUID` good for?
+
+It's represented as a `static final long SerialVersionUID` variable defined in the class.
+
+When Object is deserializing the receiver loads a class for the Object and verifies
+if the SerialVersionUID matches with one transferred here. If it does not match then `InvalidClassException` is thrown.
+
+When Class does not define the `SerialVersionUID` explicitly then it's generated
+automatically (see tool `serialver` so see what's generated for the class).
+
+=== What are advantages and disadvantages to this process of serialization?
+
+Advantages:
+
+* it's quick, easy to use, it's built-in
+* good for proof-of-concept
+
+Disadvantages:
+
+* it's Java specific, a more generic format may be used to communicate with a different languages
+* it's good chance the system will be exploited with a new security vulnerability (there were a lot before)
+* it's brittle, it's hard to extend the model. It may happen that even adding only a simple value breaks the backward compatibility.
+* "There is no reason to use Java serialization in any new system you write" (Joshua Bloch, Effective java, Item 85 Prefer alternatives to Java serialization)
+* for large-sized objects it may be burden for GC as input/output streams cache live references to all objects written or read until the stream closes
+
+
+=== Are there some variants to Java serialization?
+
+Yes.
+
+* `JAXB` to write data to XML file\
+* Protocol Buffers (protobuf)- originated from Google, requires schema
+(it has tag number to define order of data types and makes schema evolution possible). Example of scheama
++
+[source]
+----
+message Person {
+    required string name = 1;
+}
+----
+* Thrift - originated from Facebook, requires schema in Thrift IDL (interface definition language), (it has tag numbers)
+* Avro - originated from Hadoop, schema in Avro IDL or JSON (interestingly the schema has no tag numbers ordering the data types)
