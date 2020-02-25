@@ -69,12 +69,12 @@ The implementation often has these characteristics as well:
 The event sourcing kind of mimics how database works and here is the difference
 of event sourcing materializing the data state and the database doing the same
 
-. Event Sourcing materializing an Object
+.Event Sourcing materializing an Object
 image::images/reactive-system-event-sourcing-materializing-object.png[]
 
 vs.
 
-. Database Transaction materializing a Table
+.Database Transaction materializing a Table
 image::images/reactive-system-change-data-capture-materializing-table.png[]
 
 === What is Change Data Capture?
