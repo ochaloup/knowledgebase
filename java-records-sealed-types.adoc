@@ -1,0 +1,121 @@
+= Java Records and Sealed types
+
+:icons: font
+
+icon:bookmark[] https://blogs.oracle.com/javamagazine/records-come-to-java,
+                https://blogs.oracle.com/javamagazine/inside-the-language-sealed-types
+
+icon:tags[] java, programming
+
+== Main idea
+
+
+Problem:   How to make programming in java easier with less of boiler plate?
+Solution:  The solution is the project Valhalla which brings some enhancements to Java language. The Java Records and selead types are part of the Valhalla project.
+Benefit:   Easier writing data carrier objects without boiler plate.
+
+== Chapter 4
+
+=== What is the Java Records and sealed types and what are they good for?
+
+Java language constructs that makes more easier to work with Java.
+
+Java Records:: makes easier to write data carrier objects with less boiler plate code
+               it makes you to define just a 'record class' and compiler generates methods constructors, `hashCode`, `equals` and `getters/setters`.
+               Records are immutable.
+
+Sealed types:: an enhanced way to define enum. The abstract class may limit number of implementations.
+               The idea is called as in other programming languages as _disjoint union types_.
+
+
+=== What is an example for Java Record?
+
+[source,java]
+----
+public record FXOrder(int units,
+                      CurrencyPair pair,
+                      double price,
+                      LocalDateTime sentAt,
+                      int ttl) {}
+----
+
+This record defines the final fields, it defines the `constructor` and all the `getters/setters`.
+
+The record is designed to be _named tuples_.
+
+[NOTE]
+====
+From this the compiler creates a new class with name `FXOrder` which exteds `java.lang.Record`.
+The `java.lang.Record` cannot be extended manually. It's only compiler who may create a class extending it.
+====
+
+Records may define validation or a alternative constructor like this
+
+[source,java]
+----
+public record FXOrder(int units,
+                      CurrencyPair pair,
+                      double price,
+                      LocalDateTime sentAt,
+                      int ttl) {
+  // validation
+  public FXOrder {
+        if (units < 1) {
+            throw new IllegalArgumentException("FXOrder units must be positive");
+        }
+        ...
+  }
+
+  // alternative construtor with default value definition
+  public static FXOrder of(CurrencyPair pair, double price) {
+    return new FXOrder(1, pair, price,LocalDateTime.now(), 1000);
+  }
+}
+----
+
+=== What is an example for Sealed type?
+
+[source,java]
+----
+public abstract sealed class SealedPet permits Cat, Dog {
+  protected final String name;
+  public abstract void speak();
+  public SealedPet(String name) {
+    this.name = name;
+  }
+}
+
+public final class Cat extends SealedPet {
+  public Cat(String name) {
+    ...
+  }
+}
+public final class Dog extends SealedPet {
+  public Dog(String name) {
+    ...
+  }
+}
+----
+
+The `sealed` type `SealedPet` defines there could be only two classes
+which extends it and they are defined with `permit`.
+
+[NOTE]
+====
+Sealed types could be used beneficially with the new `switch` format
+(available from Java 12 as tech preview and finalized in Java 13)
+
+.new `switch` format which requires to cover all possibilities (or add default)
+[source,java]
+----
+var today = switch(day) {
+        case SATURDAY, SUNDAY -> false;
+        case MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY -> true;
+    };
+----
+====
+
+=== What is the java version the feature may be used with?
+
+* Java Records: Java 14 (tech preview)
+* Sealed types: Java 14 - ???

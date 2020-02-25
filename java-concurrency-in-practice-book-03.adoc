@@ -1,0 +1,164 @@
+= Java Concurrency in Practice (chapter 3)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Main idea
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming
+
+== Chapter 3
+
+=== What does mean memory visibility for Java concurrency programming?
+
+In general, there is no guarantee that the reading thread will see a value written
+by another thread on a timely basis, or even at all.
+
+More on that - JVM is free to reorder operations. The single-threaded program has to be correct
+but(*!*) access to variables from different threads is not considered for correcness.
+E.g. a calculated a variable may be pre-calculated and saved into CPU cache and used later.
+Such a pre-calculation may save CPU cycles.
+
+[NOTE]
+====
+There is no guarantee that operations in one thread will be performed in the order
+given by the program, as long as the reordering is not detectable from within that thread—even
+if the reordering is apparent to other threads.
+====
+
+There is one easy way to avoid the reordering and visibility issues:
+use proper *synchronization* whenever data is shared across threads.
+
+Let's say we have thread `A` and `B` then everything(*!*) A did in or prior to a synchronized block is
+visible to B when it executes a synchronized block guarded by the same lock.
+Without synchronization, there is no such guarantee.
+
+=== What is an non-atomic 64-bit operation?
+
+Writing a primitive variables (e.g. an `int`) is atomic. It's one CPU instruction.
+This is a rule with an exception for `double` and `long` (64-bit numeric variables).
+Writing could be split to multiple CPU instructions (two separate 32-bit operations)
+and it's not(*!*) atomic.
+
+The 64-bit numeric variables should be declared `volatile` or guarded by a lock
+in a multithreaded programs.
+
+=== What is _out-of-thin-air_ safety?
+
+It's a safety guarantee that an arbitrary value is not put in the variable.
+E.g. I write value `42` but other thread is reading meanwhile from the same variable
+number `-1`.
+This could happen e.g. with non-atomic write of 64-bit numeric variable.
+When only first 32-bit operation is run for the variable then the state is in-mid of processing.
+The other reading thread may read an arbitrary non-valid value at that time.
+
+=== What is a guarantee of `volatile` keyword?
+
+Provides a weaker guarantee than the `synchronized` block but it provides.
+
+Volatile variables are not cached (in a register and are not hidden from other processors)
+and ensures the writing is not reordered by JIT.
+
+So a read of a volatile variable always returns the most recent write by any thread.
+
+The visibility effects of volatile variables extend beyond the value of the volatile variable itself.
+When thread `A` writes to a volatile variable and subsequently thread `B` reads that same variable,
+the values of all variables that were visible to `A` prior to writing to the volatile variable
+become visible to `B` after reading the volatile variable.
+
+A variable is suitable for being declared volatile only if it does not participate
+in invariants involving other state variables.
+
+=== Why escaping a published variable is dangerous?
+
+Escaping of an variable mans that a class publishes an variable from internal scope
+(ie. returns the variable with `return` or provides it as `static` field).
+
+If such variable is not meant to be accessible out of the scope of the class
+then it escapes.
+
+The trouble of escaped variable is that other code and other thread(*!*) may then do changes
+and when the variable is not meant to be thread-safe the violation of safety occurs.
+
+Be aware that reference may escape implicitly. E.g. in the following example the `this`
+is implicitly escaping as the inner class instance contains a hidden reference to the enclosing
+instance.
+
+.Implicitly allowing the this reference to escape. _Don’t do this._
+[source,java]
+----
+public class ThisEscape {
+  public ThisEscape(EventSource source) {
+    source.registerListener(
+      new EventListener() {
+        public void onEvent(Event e) {
+          doSomething(e);
+        }
+    });
+  }
+}
+----
+
+=== What is thread confinement?
+
+If data is only accessed from a single thread, no synchronization is needed.
+This technique, thread confinement.
+
+Stack confinement means that variable is used only inside of private method
+and its data are only at stack and thus used only by one thread.
+That means it's local to the thread.
+The variable can't be published or escape.
+
+`ThreadLocal` is a special form of variable - a java primitive - that saves
+the variable state within the scope of the thread.
+
+.ThreadLocal example with JDBC connection
+[source,java]
+----
+private static ThreadLocal<Connection> connectionHolder = new ThreadLocal<Connection>() {
+  public Connection initialValue() {
+    return DriverManager.getConnection(DB_URL);
+  }
+};
+
+public static Connection getConnection() {
+  return connectionHolder.get();
+}
+----
+
+[NOTE]
+====
+Like global variables, thread-local variables can detract from reusability
+and introduce hidden couplings among classes, and should therefore be used
+with care.
+====
+
+=== What is the immutability good for?
+
+Immutable object is always thread-safe.
+
+Which means that an immutable object can be used safely by any thread
+without any further synchronization and synchronization is not needed to be used
+to publish them.
+
+An object is immutable if:
+
+* it's state cannot be modified after construction
+* all fields are final
+* it's properly constructed and the `this` reference does not escape during the construction
+
+=== What are rules for safe publication of a mutable objects?
+
+Objects which are not immutable needs to be safely published to be safe from other thread modifications.
+Being safely published usually means synchronization by both the publishing and the consuming thread.
+
+To publish an object safely it means making the both(*!*) the reference to object and the object's state visible to other threads at the same time.
+Safely published object is one of these:
+
+* initializing an object reference from a static initializer
+* storing a reference into a volatile field or `AtomicReference`
+* storing a reference into a `final` field of a properly constructed object
+* storing a reference into a field that is properly guarded by a lock

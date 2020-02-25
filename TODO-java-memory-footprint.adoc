@@ -1,0 +1,15 @@
+= Memory Footprint of a Java Process
+
+:icons: font
+
+icon:bookmark[] https://vimeo.com/364039638
+
+icon:tags[] java, memory
+
+== Main idea
+
+Definition:   What is the memory footprint for a Java process
+Solution:     Understand what are memory areas Java saves data to
+Benefit:      Knowledge of Java options to tune the memory handling
+
+== Details

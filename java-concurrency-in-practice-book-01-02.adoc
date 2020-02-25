@@ -110,3 +110,21 @@ Reentrancy means that lock is acquired per-thread basis rather than per-invocati
 
 Reentrancy is implemented by having a counter associated to each lock. On lock acquisition
 the counter is increased. When the counter of the lock lock is decreased to zero lock is released.
+
+=== What should be developer aware when using locks?
+
+When using locks developer has to define the locking strategy (for the best used consistently
+in the whole project). Using locks (and intristic locks) on variable do not mean thread safety
+automatically. When a compound action consists access to multiple actions the result is not thread-safety.
+For example java `Vector` class and the `contains` and `add` methods - both are thread-safe
+but if used together in *put-if-absent* operation is not thread-safe.
+
+Locks are not a *free lunch* and they should be used only where they are necessary.
+Performance may be degraded when used badly considered.
+
+When constructing the `synchronized` blocks they should not be too much granular.
+There is some overhead with creation of each `synchronized` block.
+
+Do not use *atomic* variable in the synchronized block. There should not be a big trouble
+of the performance being degraded but it's confusing (a bad API design)
+and it has no benefit in functionality.

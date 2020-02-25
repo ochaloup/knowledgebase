@@ -127,7 +127,9 @@ Launched 09/2019
 ** raw string literals (JEP 326): string over multiple lines and no escaping special characters, `String` will be defined backtick (\`)
 ** switch expressions (JEP 325): `int numLetters = switch (day) { case MONDAY, FRIDAY -> 6;}` (no `break`, `switch` returns a value)
 ** pattern matching (JEP 305): `Object value = ...; String formatted = switch (value) { case Integer i -> String.format("%d", i);}`
-** records: compiler will generate constructor, destructor, equals/hashCode/toString/accessors (no boilerplate for data carriers, as https://projectlombok.org[Lombok] does with `@Data`)
+** records: a new type of "class" which is meant as data carrier. It works similar to https://projectlombok.org[Lombok] `@Data` annotations
+   the compiler generates methods for the constructor, the destructor, the equals/hashCode/toString/getters/setters
+   (no boilerplate for data carriers)
 * Valhalla: generic specialization and value types
 ** value types: make a Java object being a primitive type : `public value Range { private int id; }` (the `value` makes the `Range` primitive - no memory indirection, no `Object` header, immutable)
 ** generic specialization: `List<int> ids = new ArrayList<>()` will be backed by not-boxed `int[]` array (faster, less memory consumption)

@@ -1,0 +1,81 @@
+= Java Concurrency in Practice (chapter 4)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Main idea
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming
+
+== Chapter 4
+
+=== How to make a class thread-safe?
+
+What if we want to compose multiple classes together to create a thread-safe program?
+The class needs to encapsulate data modification and all operation need to be thread-safe.
+
+The designing of a thread safe class means
+
+* identify the variables that form the object's state
+* identify the invariants that constrain the state variables
+* establish a policy for managing concurrent access to the object's state
+
+=== What's the biggest trouble for thread-safe classes?
+
+The class should try to be encapsulated to not make the lock policy escape.
+For example we can have an intristic lock or we can make the lock even encapsulated in the class
+that nobody else may touch the `this`
+
+[source,java]
+----
+public class PrivateLock {
+  private final Object myLock = new Object();
+  @GuardedBy("myLock") Widget widget;
+
+  void someMethod() {
+    synchronized(myLock) {
+      // Access or modify the state of widget
+    }
+  }
+}
+----
+
+but(*!*) if there are dependent state in the class then it's problematic
+and the locks have to be maintained with care.
+What we mean with dependent state is there is an invariant that requires
+a post-check of the dependent states &ndash; like `a` has to be bigger than `b` after the update.
+
+
+On the other side: if a class is composed of multiple independent(*!*, aka no invariant on variables states)
+thread-safe state variables and has no operations that have any invalid
+state transitions, then it can delegate thread safety to the underlying state variables.
+
+E.g. in `VisualComponent` the `keyListeners` and `mouseListeners` are independent
+on each other. The underalaying variable of `CopyOnWriteArrayList` is thread-safe
+and then there is no need of further synchronization on the `add` or `remove` methods.
+If the mouse and key `listeners` will be dependent - like on each key one has to be created a new mouse one,
+then maintaining the state to be thread-safe would be more difficult.
+
+[source,java]
+----
+public class VisualComponent {
+  private final List<KeyListener> keyListeners = new CopyOnWriteArrayList<KeyListener>();
+  private final List<MouseListener> mouseListeners = new CopyOnWriteArrayList<MouseListener>();
+
+  public void addKeyListener(KeyListener listener) {
+    keyListeners.add(listener);
+  }
+  public void addMouseListener(MouseListener listener) {
+    mouseListeners.add(listener);
+  }
+  public void removeKeyListener(KeyListener listener) {
+    keyListeners.remove(listener);
+  }
+  public void removeMouseListener(MouseListener listener) {
+    mouseListeners.remove(listener);
+  }
+}
+----
