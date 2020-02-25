@@ -8,9 +8,9 @@ icon:tags[] microservices, event.driven.architecture, design.patterns
 
 == Main idea
 
-Problem:   How to design a reactive system of microservices?
-Solution:  Use one of the reactive design patterns.
-Benefit:   The design of the system will be clear and maintainable.
+Problem::   How to design a reactive system of microservices?
+Solution::  Use one of the reactive design patterns.
+Benefit::   The design of the system will be clear and maintainable.
 
 == Details
 
@@ -72,7 +72,7 @@ of event sourcing materializing the data state and the database doing the same
 .Event Sourcing materializing an Object
 image::images/reactive-system-event-sourcing-materializing-object.png[]
 
-vs.
+*vs.*
 
 .Database Transaction materializing a Table
 image::images/reactive-system-change-data-capture-materializing-table.png[]
