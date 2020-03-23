@@ -77,4 +77,67 @@ image::images/reactive-system-event-sourcing-materializing-object.png[]
 .Database Transaction materializing a Table
 image::images/reactive-system-change-data-capture-materializing-table.png[]
 
-=== What is Change Data Capture?
+=== What is Change Data Capture (CDC)?
+
+Is an solution which captures a change events from the database transaction log (redo log or equivalent)
+and forwards those events to a consumer. It externalizes the transaction log of the database as a stream.
+
+image::images/reactive-system-cdc.png[]
+
+The image depicts that the transaction log change events may be consumed by a message broker or
+by an embedded client library in application. Then the events may be again persisted or forwarded to a message broker again.
+
+=== What is the Outbox pattern and how to use it with Change Data Capture?
+
+The goal of the pattern is to ensure to publish the change events within the scope of a single database transaction.
+In principle it's about to create a special table where the database collects the domain events (changes)
+withing a single transaction. On the commit of the transaction from that special table
+the CDC may grasp that event and publish it further.
+When that database transaction is committed then the records may be removed from the table - the table is an intermittent storage
+where is important only to log that the database transaction was committed.
+
+=== What is the distinction of Outbox pattern and event sourcing?
+
+The outbox pattern works with the business objects - on saving the database transaction
+the business invariant is guaranteed and it's what the *domain event* in the event sourcing represents.
+
+The Outbox pattern utilizes the domain event the same as event sourcing pattern.
+The attributes for both (outbox and event sourcing) are the same as: _Event ID_,
+_Aggregate ID_ (id of partition related events), _Aggragate type_, _Sequence/Timestamp_,
+_Message payload_.
+
+The difference is that event sourcing uses the journal which is permanent and immutable.
+The outbox pattern is meant to be ephemeral and only be a landing zone for domain events
+(captured inside of change events) which are forwarded to downstream consumers.
+
+=== What is Command Query Responsibility Segregation (CQRS)?
+
+It's a desing pattern which separates the writing and reading of data in the system.
+It creates data projection which are queryable with the read-only access.
+There could be existing multiple data projections for different purposes
+(e.g. for the same data there could be representation for text search, user account details data accessed by ID, aggregated metrics...)
+The writing side could be scaled independently to read side and they do not influence each other (in performance).
+
+Often the CQRS is connected with event sourcing where data are passed to a journal
+and there are multiple readers building a different types of the data projection.
+
+The issue of the CQRS is that it's eventual consistent. You write data and you can't expect
+the reader can see the same data on the read side. The data projection has to be updated
+first and that could be done after some time.
+There is another trouble which needs to be handled somehow and it's the risk of dual writes.
+On a failure of the reader there is a need to restart it and to continue processing events.
+It's a question which event to start with to not duplicate updates. This complexity goes to developer
+who has to manage idempotent IDs etc.
+
+=== How the Debezium and Outbox pattern plays with event sourcing and CQRS?
+
+The CDC and Outbox pattern could be a substitution to event sourcing and CQRS.
+It's capable to provide the same functionality with just a little different
+properties.
+The benefit of the CDC and Outbox are transnational updates which avoid the dual write flaw.
+It's a simpler solution, data stays within the application, you can read and query your writes.
+
+As a cons of the solution is mentioned mainly a longer latency as data goes first to transaction log
+of database and then some message broker will be needed to process whole capability of event sourcing.
+Which means one step more in the processing against the event sourcing which passes the domain events
+directly to the journal store (Kafka broker).

@@ -1,0 +1,36 @@
+= Kubernetes Operators: Automating the Container Orchestration Platform
+
+:icons: font
+
+icon:bookmark[] https://www.redhat.com/en/resources/oreilly-kubernetes-operators-automation-ebook
+
+
+icon:tags[] cloud, kubernetes
+
+== Main idea
+
+Problem:   How to automate complex processes on Kubernetes? How to make your application Kubernetes-native?
+Solution:  Use the operator pattern which offers a way how to control the application processes programmatically in extensive details.
+Benefit:   Deploying, using and maitaining the application on Kuberentes will be easy even for non-professional. All difficult handling from Kubernetes side
+           and from the application side, all the integration, is managed by code inside of the operator.
+
+== Details
+
+=== What is Operator and how does it work?
+
+Kubernetes cluster may be divided into two planes - _control plane_ and _data plane_.
+The control plane is consisted from components that manages the Kubernetes itself (API for application and orchestration logic),
+data plane stands for the applications.
+The _control plane_ is operated by _controllers_ implemented with _control loops_ that repeatedly compare
+the desired state of the cluster to its actual state.
+
+The _operators_ expand the _controllers_'s operability for the integration of applications.
+An Operator is like an automated Site Reliability Engineer for its application.
+
+Operators work by extending the Kubernetes control plane and API.
+In its simplest form, an Operator adds an endpoint to the Kubernetes API, called a _custom resource_(*CR*).
+This Operator can then take action based on the *CR*'s state. When the state changes the Operator
+reacts on the change and tries to provide the desired state.
+
+Making an Operator means creating a _CRD_ (definition of the *CR*) and providing
+a program that runs in a loop watching _CR_ of that kind.

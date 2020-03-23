@@ -4,7 +4,8 @@
 
 icon:bookmark[] https://www.youtube.com/watch?v=0RegttLUXeU, https://www.youtube.com/watch?v=-U8JFE8GZ04, https://vimeo.com/289852355,
   http://karunsubramanian.com/websphere/one-important-change-in-memory-management-in-java-8/,
-  https://www.tutorialspoint.com/java8/java8_datetime_api.htm
+  https://www.tutorialspoint.com/java8/java8_datetime_api.htm,
+  https://blogs.oracle.com/javamagazine/february-2020-v2
 
 icon:tags[] java, programming
 
@@ -98,6 +99,7 @@ Launched 09/2018
 * single-file source-code programs: you may run java file directly like `java HelloWorld.java`
 * reactive HTTP/2 client
 * Epsilon GC
+* Java Flight Recorder open-sourced and added as part of the JDK (JFR to read JVM events, Java Mission Control as a standalone tool to visualize them)
 
 Some API "features"
 
@@ -120,6 +122,17 @@ Launched 09/2019
 * Text block: multiple line string defined with backtick \`
 * switch expression (some changes, e.g. switch expression returning value via `yield` instead of `break`)
 * ZGC GC
+
+=== What is new in Java 14?
+
+* Java Flight Recorder adding an API to streaming events
+  (usually with Java Agent to subscribe to the events and then it's possible to process it and/or send it somewhere)
+* `switch expressions` are permanent (not only tech preview)
+* couple of tweaks for `text blocks`, e.g. we can use `"""` and inside of it then `\` means not starting a new line
+* pattern matching for `instanceof`, is not necessary to typing it explicitly wiht `(Group) group`, ie. `if (obj instanceof Group group) var entries = group.getEntries();`
+* `records` (see notes at `java-records-sealed-types.adoc`)
+* helpful `NullPointerException` which prints detailed info on NPE (needed to be switched on with `-XX:+ShowCodeDetailsInExceptionMessages`)
+
 
 === JDK "future" projects
 

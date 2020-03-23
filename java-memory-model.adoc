@@ -19,6 +19,9 @@ Benefit:   Keywords `volatile`, `synchronized` and `finalize` are defined precis
 Java tries to be platform-independent. Java Memory Model should abstract the behaviour
 of visibility of variables over concurrently running threads.
 
+NOTE: from Wikipedia - a memory model describes the interactions of threads
+      through memory and their shared use of the data.
+
 For example not all multiprocessor systems exhibit _cache coherency_; if one processor has an updated value of a variable in its cache,
 but one which has not yet been flushed to main memory, other processors may not see that update.
 

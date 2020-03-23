@@ -1,0 +1,164 @@
+= Java Concurrency in Practice (chapter 6)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 6: Task Execution
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           What is the ways to execute tasks and how to pool threads?
+
+=== Why is not a good idea to create a new thread per task?
+
+Let's say we have a simple WebServer which creates a `Thread` per task
+and run them asynchronously.
+
+[source,java]
+----
+class ThreadPerTaskWebServer {
+  public static void main(String[] args) throws IOException {
+    ServerSocket socket = new ServerSocket(80);
+    while (true) {
+      final Socket connection = socket.accept();
+      Runnable task = new Runnable() {
+        public void run() {
+          handleRequest(connection);
+        }
+      };
+      new Thread(task).start();
+    }
+  }
+}
+----
+
+Overhead:: But creation of thread, thread lifecycle and teardown have an overhead.
+    The overhead varies based on the platform but creating thread introduces latency in any case.
+Resource consumption:: every thread consumes resources, especially memory. When there is more
+    threads than CPUs then they sit idle. Each thread maintians two execution stacks -
+    one for java code, one for native code. More memory means pressure for garbage collector,
+    more garbage collection makes CPU busy etc.
+Stability:: when hitting the limit of threads that OS permits (as there is not enough memory or other factors defined by OS)
+    then `OutOfMemoryError` is usually thrown
+
+=== What is the Executor Framework?
+
+It's a design pattern providing a standard means of decoupling task submission from task execution.
+Up to that it provides lifecycle support for thread execution, providing hooks for statistics, application management
+and monitoring.
+
+The example with the WebServer where we decouple the task from execution could be
+
+[source,java]
+----
+class TaskExecutionWebServer {
+  private static final int NTHREADS = 100;
+  private static final Executor exec = Executors.newFixedThreadPool(NTHREADS);
+
+  public static void main(String[] args) throws IOException {
+    ServerSocket socket = new ServerSocket(80);
+    while (true) {
+      final Socket connection = socket.accept();
+      Runnable task = new Runnable() {
+        public void run() {
+          handleRequest(connection);
+        }
+      };
+      exec.execute(task);
+    }
+  }
+}
+----
+
+Then the implementation of the `Executor` may be various. Like thread-per-request,
+sequential or as it's here used the fixed thread pool.
+
+[source,java]
+----
+// thread-per-request executor
+public class ThreadPerTaskExecutor implements Executor {
+  public void execute(Runnable r) {
+    new Thread(r).start();
+  };
+}
+
+// single thread executor
+public class WithinThreadExecutor implements Executor {
+  public void execute(Runnable r) {
+    r.run();
+  };
+}
+----
+
+=== How the Executor framework may help to limit thread creation overhead?
+
+As the `Executor` manages the task execution it may involve, and it involves,
+thread pool - a homogeneous pool of worker threads.
+When there is more requests than the capacity of the pool then the task is added
+to a queue. How the queue works (e.g. to set it up bounded) is configurable on `Executor` creation.
+
+Types of the thread pools the `Executor` framework offers
+
+* `newFixedThreadPool`: fixed-size thread pool, attempts to keep the pool size constant
+* `newCachedThreadPool`: pool with flexibility to reap idle threads, places no bounds on the size of the pool
+* `newSingleThreadPool`: single threaded executor, tasks are guaranteed to be process sequentially where order of the task queue is configurable
+* `newScheduledThreadPool`: fixed thread pool which supports delayed and periodic task execution
+
+=== What is the `Executor`'s lifecycle?
+
+There is interface `ExecutorService` which provides the lifecycle for the `Executor` processing.
+
+[source,java]
+----
+public interface ExecutorService extends Executor {
+  void shutdown();
+  List<Runnable> shutdownNow();
+  boolean isShutdown();
+  boolean isTerminated();
+  boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException;
+  // ... additional convenience methods for task submission
+}
+----
+
+The `ExecutorService` is defined in one of the three states - `running`, `shutting down`, `terminated`.
+The `shutdown` executes a graceful shutdown and no new task is accepted,
+but all tasks already accepted will be executed from queue.
+The `shutdownNow` tries to abruptly cancel the tasks (while no new task is accepted).
+Waiting for `ExecutorService` reaches the `terminated` state offers method `awaitTermination`.
+
+=== How to run delayed and periodic tasks?
+
+One way is to use `java.util.Timer` crating a `TimerTask` but it has drawbacks - single threaded, for long tasks the time accuracy is wrong
+(e.g. a task should be executed every 2 minutes, the prior one takes 10 minutes, the original one is then executed 5 times in rapid succession).
+Replacement is `ScheduledThreadPoolExecutor`.
+
+=== What is a result-bearing task?
+
+It's an abstraction to a task which may be returning some value of work which was done.
+The Java has the `java.util.concurrent.Future`. The `Future` is a task which is processed
+and the caller may still asks with `get()` to be announced that the task finished.
+
+The real task that runs behing the `Future` is either `Runnable` (no result returned on `Future.get()`)
+or `Callable<V>`. The `Future.get()` means the caller waits for it being finished and get some return value of type `<V>`.
+
+NOTE: `Callable` returning nothing can be configured as `Callable<Void>`.
+
+Implicit in the specification of Future is that task lifecycle can only move forwards, not backwards
+- just like the `ExecutorService` lifecycle. Once a task is completed, it stays in that state forever.
+
+The use of the `Future` needs to be expanded with notion of execution exception states.
+The both interfaces uses `get()` to get the completion state (the task state is either `started` or `running` or `completed`).
+When the task is not yet completed then the `get()` blocks.
+When the task already completed then `get()` returns immediatelly or throws and `Exception`.
+When the task throws an exception during execution it's wrapped under `ExecutionException` and the original one
+is available by calling `getCause()`. If the task was cancelled then the `get()` throws `CancellationException`.
+
+=== How to submit a task and then wait for result to be available?
+
+The option is to use `CompletionService`. It's where the `Executor` meets the `BlockingQueue`.
+`CompletionService.take()` blocks until some task (`Future`) has finished
+and then returns it and the caller may immediatelly consumes the result (or catch the exception).
+
+NOTE: the similar could be done when asking `Fututre.get(0)` of the zero timeout in cycle.

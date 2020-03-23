@@ -6,11 +6,9 @@ icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/
 
 icon:tags[] java, concurrency
 
-== Main idea
+== Chapter 3: Sharing Objects
 
 Problem:   The best and the bad practices in Java concurrency and parallel programming
-
-== Chapter 3
 
 === What does mean memory visibility for Java concurrency programming?
 
@@ -162,3 +160,45 @@ Safely published object is one of these:
 * storing a reference into a volatile field or `AtomicReference`
 * storing a reference into a `final` field of a properly constructed object
 * storing a reference into a field that is properly guarded by a lock
+
+=== What is the `final` good for the safely publishing object?
+
+The `final` supports the construction of immutable objects.
+`Final` fields (the reference) can't be modified but they also have special semantics under the Java Memory Model.
+
+According to Java spec,
+_"a thread that can only see a reference to an object after that object has been completely initialized is guaranteed to see the correctly initialized values for that object’s final fields"_.
+
+That means by Java spec is ensured that the final fields will be calculated and made visible
+before the time the object reference is published.
+
+On example from https://liyanxu.blog/2018/05/19/java-thread-safe-problems
+
+[source,java]
+----
+class Sample {
+    private int a;
+    private int b;
+
+    public Sample(int a, int b) {
+        this.a = a;
+        this.b = b;
+    }
+}
+
+public class Publisher {
+    private Sample sample = null;
+
+    public void initSample(int a, int b) {
+        sample = new Sample(a, b);
+    }
+    public Sample getSample() {
+        return sample;
+    }
+}
+----
+
+On executing the code from two threads - `T1` and `T2` it could happens following.
+`T1` is calling `initSample(1, 2)`, and `T2` is calling `getSample()`.
+`T2` can potentially get a *partially initialized* object!
+Such as, `sample.getA() == 1, sample.getB() == 0` (0 is the default value for `int b`).

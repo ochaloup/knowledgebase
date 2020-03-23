@@ -10,7 +10,7 @@ icon:tags[] java, concurrency
 
 Problem:   The best and the bad practices in Java concurrency and parallel programming
 
-== Chapter 1
+== Chapter 1: Introduction
 
 === What are the properties that the concurrent program needs to consider?
 
@@ -19,7 +19,7 @@ The concurrent programs need to care about correctness/safety and liveness.
 Safety means that program runs correctly even when the functionality is run in parallel threads
 (thread safety) and liveness refers to fact that program will eventually get to the result.
 
-== Chapter 2
+== Chapter 2: Thread Safety
 
 === What is in core of writing thread-safe program?
 

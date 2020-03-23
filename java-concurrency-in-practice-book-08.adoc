@@ -1,0 +1,80 @@
+= Java Concurrency in Practice (chapter 8)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 8: Applying Thread Pools
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           What are advanced options for configuring and tuning thread pools.
+
+=== How to size thread pools?
+
+The general advice is for computational intensive work to have number of threads
+set to number of CPUs +1.
+For IO bound and blocking operations the thread pool has to be bigger.
+
+NOTE: `int N_CPUS = Runtime.getRuntime().availableProcessors();`
+
+It was said link:java-concurrency-in-practice-book-06.html[in the sixth chapter of the book]
+`Executor` provides abstraction to split task definition and execution.
+What if the execution is slow and the there is a lot of tasks coming.
+Then depends on what happens with the incoming tasks now.
+By default the `Executors.newSingleThreadExecutor()`, `Executors.newCachedThreadPool()`
+or `Executors.newFixedThreadPool(int nThreads)` creates a `ExecutorService`
+unbounded queue.
+
+That means when there is not enough threads (which is not the case for the cached thread variant)
+then the tasks are put to unbounded queue where it waits until there is some free thread.
+The task put to queue is more lightweight than the creation of thread but still it takes memory.
+
+The queues used:
+
+* `newSingleThreadExecutor` : `LinkedBlockingQueue`
+* `newFixedThreadPool` : `LinkedBlockingQueue`
+* `newCachedThreadPool` : `SynchronousQueue` (in Java 6 with a new non-blocking algorithm that improved throughput)
+
+The `ExecutorService` is implemented by `ThreadPoolExecutor`. This makes more possibilities to tune
+the parameters of the thread pool creation.
+
+NOTE: it's possible to cast the `ExecutorService` to `ThreadPoolExecutor` and use methods like
+      `setMaximumPoolSize` after creation.
+      If used the single-threaded variant then the result is wrapped with `unconfigurableExecutorService` method
+      and the casting is not possible.
+
+[source, java]
+----
+public ThreadPoolExecutor(
+  int corePoolSize,
+  int maximumPoolSize,
+  long keepAliveTime,
+  TimeUnit unit,
+  BlockingQueue<Runnable> workQueue,
+  ThreadFactory threadFactory,
+  RejectedExecutionHandler handler
+)
+----
+
+* `corePoolSize` is minimum size and in dependency to queue type is not recommended to be zero
+  (when zero then it can be that work is delayed in execution. The `ThreadPoolExecutor` creates a new thread only if the work queue is full.
+   so the number of threads was put to `0` and unbounded queue may declare that's never being full)
+* `maximumPoolSize` the max size. E.g. `newCachedThreadPool` sets the maximum to `Integer.MAX_VALUE`
+  and the core size to 0. The `newFixedThreadPool(int)` sets the max and core size both to `int`
+* `keepAliveTime`/`unit` a thread that has been idle for longer than the keep-alive time becomes a candidate for reaping
+* `workQueue` make possible to define how task will be handled when there is not fast consumers
+* `threadFactory` `ThreadFactory` has a single method, `newThread`, that is called whenever a
+  thread pool needs to create a new thread. E.g. you might want to specify an `UncaughtExceptionHandler`,
+  or instantiate an instance of a custom `Thread` class, such as one that performs debug logging.
+* `handler` defines what happens when there is no more left space in the task queue.
+
+Policies for handler which are available are
+
+* `AbortPolicy` : throws `RejectedExecutionException`
+* `CallerRunsPolicy` : runs the task in the execution threads which makes it blocking.
+  There e.g. for sockets then no thread which would accepting new requests
+  that means that the incoming tasks are waiting and timeouting on TCP layer
+  and TCP layer is expected to throttle the number of incoming tasks.
+* `DiscardPolicy` and `DiscardOldestPolicy` : silently discards the task

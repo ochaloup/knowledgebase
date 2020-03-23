@@ -1,0 +1,241 @@
+= Java Concurrency in Practice (chapter 5)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 5: Building Blocks
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           What are the blocks which may be used to create a concurrent programs?
+
+===  What about Synchronized Collections and what are issues with them?
+
+Synchronized collection means wrapping the list with a synchronized wrapper maintaining
+the thread-safety of the standard operations with the locking.
+
+[source,java]
+----
+public List<E> list = Collections.synchronizedList(new ArrayList<E>());
+----
+
+Synchronized collections are thread-safe but they need a additional client-side
+locking to guard compound actions.
+
+Developer has to take a big care to use the locks when doing operation on top of it.
+
+On created iterator when a change happens during the iteration it throws
+unchecked `ConcurrentModificationException`.
+
+For example this could seem to be a thread-safe as the `add` and `remove` operations
+are `synchronized`. But the `set.toString()` proceed with iterator to print
+all the records. Because of that the `addTenThings` may throw `ConcurrentModificationException`.
+
+[source,java]
+----
+public class HiddenIterator {
+  @GuardedBy("this")
+  private final Set<Integer> set = new HashSet<Integer>();
+  public synchronized void add(Integer i) { set.add(i); }
+  public synchronized void remove(Integer i) { set.remove(i); }
+  public void addTenThings() {
+    Random r = new Random();
+    for (int i = 0; i < 10; i++)
+      add(r.nextInt());
+    System.out.println("DEBUG: added ten elements to " + set);
+  }
+}
+----
+
+[NOTE]
+====
+Just as encapsulating an object's state makes it easier to preserve its invariants,
+encapsulating its synchronization makes it easier to enforce its synchronization policy.
+====
+
+=== What about Concurrent Collections?
+
+Does not use (only) locks to manage the thread-safety of the collection state. (TODO: what do they use?)
+
+Implementations of the collections are following:
+
+* `ConcurrentHashMap` instead of synchronized hash-based `Map`
+* `CopyOnWriteArrayList` instead of synchronized `List` (and `CopyOnWriteArraySet` instead of synchronized `Set`)
+* `ConcurrentSkipListMap` instead of synchronized `SortedMap` (like synchronized `TreeMap`)
+* `ConcurrentSkipListSet` instead of synchronized `SortedSet` (like synchronized `TreeSet`)
+
+There are as well
+
+* `Queue` has `ConcurrentLinkedQueue` as traditional FIFO queue implementation,
+  and  `PriorityQueue` as non-concurrent priority ordered queue.
+* `BlockingQueue` extends `Queue` of providing the blocking insertion and retrieval
+  (empty queue blocks retrieval, full queue blocks insertion).
+* `ConcurrentSkipListMap` and `ConcurrentSkipListSet` replacements for a synchronized `SortedMap` or `SortedSet`
+  (`TreeMap` or `TreeSet` wrapped with `synchronizedMap`)
+
+[NOTE]
+====
+Replacing synchronized collections with concurrent collections can offer
+dramatic scalability improvements with little risk.
+====
+
+==== What to say about `ConcurrentHashMap` and `CopyOnWriteArrayList`
+
+`ConcurrentHashMap`
+* is better than synchronized version when there is not too much contention
+* it uses `lock striping` as finer-grained version of locking
+* it provides additional methods like `put-if-absent`, `remove-if-equal`, `replace-if-equal`
+
+`CopyOnWriteArrayList`
+* good to be used where is involved more reading than writing (e.g. list of listeners is written once and then read several times)
+* iterator does not throw `ConcurrentModificationException` as it maintains a reference to the backing `array` as it was at time of iterator creation
+
+=== What is the `BlockingQueue` good for?
+
+* It's usable for `producer-consumer` pattern - separates the to be done work from the execution of it
+* The queue blocks for `put` operation when buffer is full. It blocks on `take` when the queue is empty.
+* One of the most common `producer-consumer` designs is a thread pool coupled with a work queue
+* Implementations are: `LinkedBlockingQueue` and `ArrayBlockingQueue` as FIFO queues, `PriorityBlockingQueue` which is priority-ordered queue
+  (uses Java standard `Comparable and/or Comparator`)
+
+=== What is `SynchronousQueue`?
+
+It's implementation of the `BlockingQueue` but it's not really a queue.
+It maintains no storage but it defines a list of queued threads waiting to enqueu or dequeue an element.
+The `put` and `take` block unless another thread is already waiting to participate in the handoff.
+It may reduce the latency associated with the moving data from producer to consumer
+because the work can be handed off directly.
+
+=== What is the Work Stealing?
+
+There is another two collection types - `Dequeue` ([de:k]) and `BlockingDeque`.
+`Dequeu` is double-ended queue and allows insertion and removel from both the head and the tail
+(implemented as `ArrayDeque` and `LinkedBlockingDeque`).
+
+They are related to work-stealing pattern where every consumer has its own deque.
+If a consumer exhaust the work on its own deque, it can steal work from the tail of someone else's deque.
+Work stealing could be more scalable than the producer-consumer because workers do not contend for a shared work queue.
+
+=== Why thread may be interrupted?
+
+The thread may be in blocked states which are: `BLOCKED`, `WAITING`, `TIMED_WAITING`.
+This is when thread is e.g. waiting for I/O operation, waiting to acquire a lock, waiting to wake up from `Thread.sleep`
+or waiting for other thread to finish computation.
+The distinction of blocking operation and ordinary long running operation is that blocked thread
+must wait for an external event. This is beyond its control before it can proceed.
+When event occurs the thread is placed to `RUNNABLE` state.
+
+When a method can throw `InterruptedException`, it is telling you that it is a
+*blocking* method, and further that if it is interrupted, it will make an effort to stop blocking *early*.
+
+When your code calls a method that throws `InterruptedException`, then your method is a blocking method too, and
+*must have a plan* for responding to interruption.
+
+When `InterruptedException` is caught then the `catch block` has to manage it.
+You may rethrow `InterruptedException`. If it's not possible (e.g. in `Runnable`) then
+thread status has to be set to interrupted manual by calling `interupt`.
+The interruption can't be swallowed with doing nothing!
+
+[NOTE]
+====
+The only acceptable situation to swallow an `interrupt` is when you are
+extending  `Thread`  and  therefore  control  all  the  code  higher  up  on  the  call  stack.
+====
+
+=== What are `Latches` good for?
+
+The `Latch` is a synchronizer. The synchronizers coordinate the control flow of the threads.
+
+`Latch` works as a gate. Until the latch reaches the terminal state the gate is closed and no thread can pass,
+and in the terminal state the gate opens, allowing all threads to pass.
+When the final state is reached then it cannot be reset.
+
+Latches are for waiting for events, they block a group of threads until some event has occurred.
+
+`CountDownLatch` is the implementation. On construction a positive integer is passed - the count down.
+The count down represents the number of events that the latch waits for to "open the gate".
+`await` method blocks the thread until the count down reaches zero.
+
+An example which starts n-`Threads` threads and invokes there a `task`.
+It calculates how long this execution takes.
+
+[source,java]
+----
+public long timeTasks(int nThreads, final Runnable task) throws InterruptedException {
+  final CountDownLatch startGate = new CountDownLatch(1);
+  final CountDownLatch endGate = new CountDownLatch(nThreads);
+  for (int i = 0; i < nThreads; i++) {
+    Thread t = new Thread() {
+      public void run() {
+        try {
+          startGate.await();
+          try {
+            task.run();
+          } finally {
+            endGate.countDown();
+          }
+        } catch (InterruptedException ignored) { }
+      }
+    };
+  t.start();
+  }
+  long start = System.nanoTime();
+  startGate.countDown();
+  endGate.await();
+  long end = System.nanoTime();
+  return end-start;
+}
+----
+
+=== What is `FutureTask`?
+
+Acts similarly as the `Latch` where it's a task implemented as `Callable`.
+The task has one of three states: waiting to run, running, completed (normal completion, cancellation, exception).
+When the state is reached it can't go back.
+It's used by the `Executor` framework.
+
+[source,java]
+----
+FutureTask<ProductInfo> future =
+  new FutureTask<ProductInfo>(new Callable<ProductInfo>() {
+    public ProductInfo call() throws DataLoadException {
+      return loadProductInfo();
+    }
+  });
+try {
+  future.get();
+} catch (ExecutionException e) {
+  Throwable cause = e.getCause();
+  ...
+}
+----
+
+[NOTE]
+====
+Whatever the task code may throw, it is wrapped in an `ExecutionException` and rethrown from `Future.get`.
+====
+
+=== What are `Semaphores` good for?
+
+It's a structure to manage a virtual *permits*. Activity may `acquire` one and `release` when it's done.
+When there is no permit available then activity is blocked and waiting.
+Semaphores are useful for implementing resource pools such as database connection pools.
+
+=== What are `Barriers` good for?
+
+`Barriers` are similar to `Latches` but `Latches` are for waiting for events while `Barriers`
+are good for waiting for other threads.
+Implementation is `CyclicBarrier`, it allows a fixed number of parties to rendezvous
+repeatedly at a barrier point.
+
+Barriers are often used in simulations, where the work to calculate one step can be done in parallel
+but all the work associated with a given step must complete before advancing to the next step.
+
+[NOTE]
+====
+For heavy computational problems that do no I/O and access no shared data,
+_Ncpu_ or _Ncpu+1_ threads yield optimal throughput; more threads do not help,
+and may in fact degrade performance as the threads compete for CPU and memory resources.
+====

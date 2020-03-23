@@ -1,0 +1,251 @@
+= Java Concurrency in Practice (chapter 7)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601,
+                https://docs.oracle.com/javase/1.5.0/docs/guide/misc/threadPrimitiveDeprecation.html
+
+icon:tags[] java, concurrency
+
+== Chapter 7: Cancellation and Shutdown
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           What is the way to cancel the asynchronous task in Java.
+
+=== What is problematic on hard canceling a thread execution by Java runtime?
+
+The Java `java.util.Thread` deprecated (and does *not* implement) methods
+`stop()/suspend()/resume()`. The main reason is that that methods means
+issues on locks being taken during thread execution. Non-recoverable deadlocks
+may occur pretty easily.
+
+=== Is there a way to cancel a task/thread before its normal end then?
+
+Yes, but it's a developer who has to write the code that way. For example
+the processing may have a `cancel` flag (it should be `volatile`)
+which is checked during processing.
+
+[source,java]
+----
+public void run() {
+  BigInteger p = BigInteger.ONE;
+  while (!this.cancelled) {
+    p = p.nextProbablePrime();
+    synchronized (this) {
+      primes.add(p);
+    }
+  }
+}
+
+public void cancel() {
+  this.cancel = true;
+}
+----
+
+=== How to cancel a task/thread which utilizes a blocking action?
+
+NOTE: with _a blocking action_ we understand some operation which stands and doing nothing.
+      E.g. it could be an IO operation waiting for user to provide some input from keyboard.
+      Or a blocking queue operation `take` which may be blocked for a long time until producer provides some data.
+
+If the thread _stands_ on a blocking action then there is a mechanism of interruption.
+Blocking operations are e.g. `IO operations`, `Thread.sleep`, `Object.wait` and others.
+
+Thread interruption is a cooperative mechanism for a thread to signal another thread that it should,
+at its convenience and if it feels like it, stop what it is doing and do something else.
+
+NOTE: There is nothing in the API or language specification that ties interruption to any specific cancellation semantics,
+      but in practice, using interruption for anything but cancellation is fragile and difficult to sustain in larger applications.
+
+.Thread interruption methods
+[source,java]
+----
+public class Thread {
+  public void interrupt() { ... }
+  public boolean isInterrupted() { ... }
+  public static boolean interrupted() { ... }
+}
+----
+
+For the developer the basic handling of the thread interruption is
+* behave as the blocking methods and throwing the `InterruptedException`.
+* not throwing exception but handle it and then call the `Thread.currentThread().interrupt()` to set the interruption `flag`
+  (on handling the exception the flag is removed)
+* be sure that we are the owner of the thread and we can clean everything and release the thread
+
+The last example could be e.g. this
+
+.Using Interruption for Cancellation.
+[source,java]
+----
+class PrimeProducer extends Thread {
+  private final BlockingQueue<BigInteger> queue;
+  PrimeProducer(BlockingQueue<BigInteger> queue) {
+    this.queue = queue;
+  }
+  public void run() {
+    try {
+      BigInteger p = BigInteger.ONE;
+      while (!Thread.currentThread().isInterrupted())
+        queue.put(p = p.nextProbablePrime());
+      } catch (InterruptedException consumed) {
+        /* Allow thread to exit */
+      }
+    }
+    public void cancel() { interrupt(); }
+}
+----
+
+=== What are the best practices to interrupt the thread?
+
+As everywhere is good to use an existing library. Java API provides the `Future`
+that handles the interruption with `cancel` method with parameter `boolean mayInterruptIfRunning`.
+
+.Cancelling a Task using `Future` with timeout
+[source,java]
+----
+public static void timedRun(Runnable r, long timeout, TimeUnit unit) throws InterruptedException {
+  Future<?> task = taskExec.submit(r);
+  try {
+    task.get(timeout, unit);
+  } catch (TimeoutException e) {
+    // task will be cancelled below
+  } catch (ExecutionException e) {
+    // exception thrown in task; rethrow
+    throw launderThrowable(e.getCause());
+} finally {
+    // Harmless if task already completed
+    task.cancel(true); // interrupt if running
+  }
+}
+----
+
+=== Some example of handling interruption?
+
+Interruption of the next example of the Logging service is thread-safe
+while trying not to locking extensively.
+
+[source,java]
+----
+public class LogService {
+private final BlockingQueue<String> queue;
+private final LoggerThread loggerThread;
+private final PrintWriter writer;
+@GuardedBy("this") private boolean isShutdown;
+@GuardedBy("this") private int reservations;
+public void start() { loggerThread.start(); }
+}
+public void stop() {
+synchronized (this) { isShutdown = true; }
+loggerThread.interrupt();
+}
+public void log(String msg) throws InterruptedException {
+synchronized (this) {
+if (isShutdown)
+throw new IllegalStateException(...);
+++reservations;
+}
+queue.put(msg);
+}
+private class LoggerThread extends Thread {
+public void run() {
+try {
+while (true) {
+try {
+synchronized (this) {
+if (isShutdown && reservations == 0)
+break;
+}
+String msg = queue.take();
+synchronized (this) { --reservations; }
+writer.println(msg);
+} catch (InterruptedException e) { /* retry
+ */ }
+}
+} finally {
+writer.close();
+}
+}
+}
+----
+
+=== How to shutdown the `Executor` service?
+
+ExecutorService offers two ways to shut down: graceful shutdown with `shutdown`, and
+abrupt shutdown with `shutdownNow`. In an abrupt shutdown, `shutdownNow` returns the list of tasks that had not yet
+started after attempting to cancel all actively executing tasks.
+
+Encapsulating an `ExecutorService` extends the ownership chain from application to
+service to thread by adding another link; each member of the chain manages the lifecycle
+of the services or threads it owns.
+
+.Logging Service that uses an `ExecutorService`
+[source,java]
+----
+public class LogService {
+  private final ExecutorService exec = newSingleThreadExecutor();
+  ...
+  public void start() { }
+  public void stop() throws InterruptedException {
+    try {
+      exec.shutdown();
+      exec.awaitTermination(TIMEOUT, UNIT);
+    } finally {
+      writer.close();
+    }
+  }
+  public void log(String msg) {
+    try {
+      exec.execute(new WriteTask(msg));
+    } catch (RejectedExecutionException ignored) { }
+  }
+}
+----
+
+=== How to shutdown with consumer producer pattern?
+
+We can use a poison pills. If we know the number the producers and consumers
+then we may define a `poison pill` - some marker item which defines that
+shutdown was invoked. Every producer puts the number of `pills` equals of the
+consumers. When consumer consumes the number of `pills` as number of producers
+he know three is no more work for him and it may gracefully shutdown.
+
+=== Does Java API provides some handlers for the shutdown situations?
+
+Yes. There is uncaught exception handlers.
+
+[source,java]
+----
+public interface UncaughtExceptionHandler {
+  void uncaughtException(Thread t, Throwable e);
+}
+----
+
+To set an `UncaughtExceptionHandler` for pool threads, provide a `ThreadFactory` to the `ThreadPoolExecutor`
+constructor.
+
+`UncaughtExceptionHandler` on a per thread basis with `Thread.setUncaughtExceptionHandler`, and canal so set the
+default `UncaughtExceptionHandler` with `Thread.setDefaultUncaughtExceptionHandler`.
+However, only one of these handlers is called first the JVM looks for a per thread handler,
+then for a `ThreadGroup` handler. The default handler implementation in
+ThreadGroup delegates to its parent threadgroup, and so on up the chain until one of the `ThreadGroup` handlers
+deals with the uncaught exception or it bubbles up to the top-level threadgroup.
+The top level threadgroup handler delegates to the default system handler (if one exists;
+the default is none) and otherwise prints the stacktrace to the console.
+
+If you want to be notified when a task fails due to an exception so that you can take some task
+specific recovery action, either wrap the task with a
+`Runnable` or `Callable` that catches the exception or override the after Execute hook in `ThreadPoolExecutor`.
+
+The JVM shutdown may be handled with shutdown hook: `Runtime.getRuntime().addShutdownHook(new Thread() {...})`.
+Hooks may be run from different threads.
+
+The JVM has two types of threads. The normal one and daemon. The JVM shutdowns when no
+normal thread is running. The deamon thread may be killed at any time.
+The daemon thread is not a good option for any IO operations!
+
+On getting instances from the memory when garbage collection is run then `Object.finalize`
+method is called before it's processed. It may be called by more than one threads
+at a time.
+Do not add any time consuming processing to the `finalize` methods.
+Otherwise it can stuck the JVM processing strongly.
