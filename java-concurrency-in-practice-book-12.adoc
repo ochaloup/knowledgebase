@@ -1,0 +1,105 @@
+= Java Concurrency in Practice (chapter 12)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 12: Testing Concurrency
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           How to test test concurrent programs?
+
+=== How to test a blocking operation?
+
+An example of such testing could be here where we expect the buffer blocks
+forever as there is no item.
+
+[source,java]
+----
+void testTakeBlocksWhenEmpty() {
+  final BoundedBuffer<Integer> bb = new BoundedBuffer<Integer>(10);
+  Thread taker = new Thread() {
+  public void run() {
+    try {
+      int unused = bb.take();
+      fail(); // if we get here, it's an error
+    } catch (InterruptedException success) { }
+  }};
+  try {
+    taker.start();
+    Thread.sleep(LOCKUP_DETECT_TIMEOUT);
+    taker.interrupt();
+    taker.join(LOCKUP_DETECT_TIMEOUT);
+    assertFalse(taker.isAlive());
+  } catch (Exception unexpected) {
+    fail();
+  }
+}
+----
+
+=== How to test safety?
+
+Tests should be run on multiprocessor systems to increase the diversity of potential interleavings. However, having
+more than a few CPUs does not necessarily make tests more effective. To maximize the chance of detecting timing-sensitive
+data races, there should be more active threads than CPUs, so that at any given time some threads are running
+and some are switched out, thus reducing the predictability of interactions between threads.
+
+To generate more interleavings it could be used `Thread.yield` which should encourage more context switches
+but some JVM implementation may implement it as `no-op`. Using `Thread.sleep()` with non-zero but short
+sleep time could be better.
+
+* Technically, it is impossible to force a garbage collection; System.gc only suggests to the JVM that this might be a good time to perform a
+garbage collection. HotSpot can be instructed to ignore `System.gc` calls with `-XX:+DisableExplicitGC`.
+* For testing threads it could be useful to have chance to provide a testing `ThreadFactory`
+
+[NOTE]
+====
+.Medium quality random number generator suitable for testing
+[source,java]
+----
+static int xorShift(int y) {
+  y ^= (y << 6);
+  y ^= (y >>> 21);
+  y ^= (y << 7);
+  return y;
+}
+----
+====
+
+=== How to test performance?
+
+In theory, developing performance tests is easyfind a typical usage scenario, write a program that executes that scenario
+many times, and time it. In practice there are many pitfalls.
+
+* Garbage collection
+** approach is to either omit running it (which is hard and need tuning of memory to fit all testing data)
+** or to allow gc but be aware how many times it usually happens (it's closer to real-world performance)
+** to find out how many times it was run JVM option `verbose:gc` may be used
+* Dynamic compilation
+** JIT runs hot path, it's usual to have some warm-up cycles when the hot code path is "jitted"
+** The JVM may choose to perform compilation in the application thread or in the background
+  thread; each can bias timing results in different ways.
+** to find out when JIT happens you may use `-XX:+PrintCompilation`
+* Unrealistic sampling code paths
+** Testing data and process could not be realistic to real-world application
+** JIT them could optimize and processing behaves differently than normally, e.g.
+   the JVM can use monomorphic call transformation to convert a virtual method call to a direct method call
+  if no classes currently loaded override that method, but it invalidates the compiled code
+  if a class is subsequently loaded that overrides the method.
+* Unrealistic degrees of contention
+** depending on data the contention may or may not happen
+* Dead code elimination
+** Writing effective performance tests requires tricking the optimizer into not optimizing away your benchmark
+   as dead code. This requires every computed result to be used somehow by your program in a way that does not require
+   synchronization or substantial computation.
+** A cheap trick for preventing a calculation from being optimized away without introducing too much overhead is to
+   compute the `hashCode` of the field of some derived object, compare it to an arbitrary value such as the current value of
+   `System.nanoTime`, and print a useless and ignorable message if they happen to match
++
+[source,java]
+----
+if (foo.x.hashCode() == System.nanoTime())
+  System.out.print(" ");
+----

@@ -1,0 +1,139 @@
+= Java Concurrency in Practice (chapter 10)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 10: Avoiding Liveness Hazards
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           How to omit deadlock, what are the design decision precluding the conditions that could cause it, what are causes of liveness failures.
+
+=== How to avoid deadlock threats?
+
+For precluding the deadlock the global order of acquiring locks has to be defined.
+
+> A program will be free of lockͲordering deadlocks if all threads acquire
+> the locks they need in a fixed global order.
+
+For example example of deadlock-prone code where depends on the outer code
+to pass the order of arguments. If one thread will transfer money from account X to Y,
+and another thread from Y to X, the deadlock may easily occur.
+
+[source,java]
+----
+public void transferMoney(Account fromAccount, Account toAccount, DollarAmount amount) throws InsufficientFundsException {
+  synchronized (fromAccount) {
+    synchronized (toAccount) {
+      if (fromAccount.getBalance().compareTo(amount) < 0)
+        throw new InsufficientFundsException();
+      else {
+        fromAccount.debit(amount);
+        toAccount.credit(amount);
+      }
+    }
+  }
+}
+----
+
+An possible solution is e.g. use the lock ordering defined by object hash code
+(we need to add the `tie` option. The hash code won't be equal often and thus global lock
+will not contend our application with high possibility)
+
+[source,java]
+----
+void transferMoney(final Account fromAcct, final Account toAcct, final DollarAmount amount) throws InsufficientFundsException {
+  class Helper {
+    public void transfer() throws InsufficientFundsException {
+      if (fromAcct.getBalance().compareTo(amount) < 0)
+        throw new InsufficientFundsException();
+      else {
+        fromAcct.debit(amount);
+        toAcct.credit(amount);
+      }
+    }
+  }
+
+  int fromHash = System.identityHashCode(fromAcct);
+  int toHash = System.identityHashCode(toAcct);
+  if (fromHash < toHash) {
+    synchronized (fromAcct) {
+      synchronized (toAcct) {
+        new Helper().transfer();
+      }
+    }
+  } else if (fromHash > toHash) {
+    synchronized (toAcct) {
+      synchronized (fromAcct) {
+        new Helper().transfer();
+      }
+    }
+  } else {
+    synchronized (tieLock) {
+      synchronized (fromAcct) {
+        synchronized (toAcct) {
+          new Helper().transfer();
+        }
+      }
+    }
+  }
+}
+----
+
+=== What is open calls?
+
+Open call is a call of a method when a the time of calling there is no lock held.
+When calling a method - unknown, alien one - and we hold a lock there is a good potential
+to a long striving lock or a deadlock.
+When calling a method - known and controlled one - we may be checking the method does not take
+long time but in case of some issue any locking trouble is much harder for investigation.
+
+NOTE: Strive to use open calls throughout your program. Programs that rely on open calls are far easier to analyze for
+      deadlock-freedom than those that allow calls to alien methods with locks held.
+
+=== What are other things which may cause a deadlock?
+
+When taking a resource and a pool is used. We take a connection to DB #1 and waiting
+for a connection to DB #2. Other thread takes a connection to DB #2 and waits for the #1.
+
+=== What are other liveness hazards other than the deadlock?
+
+* Starvation
+* Poor responsiveness
+* Livelock
+
+=== How to investigate a deadlock?
+
+Use the threaddump - `jstack -l <pid>`.
+
+To trigger a thread dump, you can send the JVM process a `SIGQUIT` signal (`kill -3`) on Unix platforms,
+or press the `Ctrl-\` key on Unix or `Ctrl-Break` on Windows platforms.
+
+[source,txt]
+----
+Found one Java-level deadlock:
+=============================
+"ApplicationServerThread":
+  waiting to lock monitor 0x080f0cdc (a MumbleDBConnection),
+  which is held by "ApplicationServerThread"
+"ApplicationServerThread":
+  waiting to lock monitor 0x080f0ed4 (a MumbleDBCallableStatement),
+  which is held by "ApplicationServerThread"
+
+Java stack information for the threads listed above:
+  "ApplicationServerThread":
+    at MumbleDBConnection.remove_statement
+    - waiting to lock <0x650f7f30> (a MumbleDBConnection)
+    at MumbleDBStatement.close
+    - locked <0x6024ffb0> (a MumbleDBCallableStatement)
+    ...
+
+  "ApplicationServerThread":
+    at MumbleDBCallableStatement.sendBatch
+    - waiting to lock <0x6024ffb0> (a MumbleDBCallableStatement)
+    at MumbleDBConnection.commit
+    - locked <0x650f7f30> (a MumbleDBConnection)
+    ...
+---

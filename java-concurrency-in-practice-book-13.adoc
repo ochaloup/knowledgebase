@@ -1,0 +1,91 @@
+= Java Concurrency in Practice (chapter 13)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 13: Explicit Locks
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           What is the Java alternative to instrinstic locks_
+
+=== What is the `Lock` and `ReentrantLock` interfaces?
+
+The lock interface looks like this
+
+[source,java]
+----
+public interface Lock {
+  void lock();
+  void lockInterruptibly() throws InterruptedException;
+  boolean tryLock();
+  boolean tryLock(long timeout, TimeUnit unit)
+  throws InterruptedException;
+  void unlock();
+  Condition newCondition();
+}
+----
+
+It comes with a more flexible functionality than the intrinsic lock
+but(!) it requires care from developer. The `finally` block cannot be
+forgotten.
+On the other hand it makes possible to release the lock on other place
+than directly in the same block of code as for intrinsic locks it is.
+
+.finally block can't be forgotten
+[source,java]
+----
+Lock lock = new ReentrantLock();
+...
+lock.lock();
+try {
+  // update object state
+  // catch exceptions and restore invariants if necessary
+} finally {
+  lock.unlock();
+}
+----
+
+The advantage is that the lock may be taken interruptedly.
+The `tryLock` throws the `InterruptedExcpetion` and it may be defined with timeout.
+When intrinsic lock waits for a lock it's not interruptible.
+
+An advantage of intrinsic lock is that the threaddump refers them easily and
+in better way than this explicit `Lock` object is referred.
+
+=== What is a fairness lock?
+
+Nonfair `ReentrantLocks` do not go out of their way to promote barging
+they simply don't prevent a thread from barging if it shows up at the right time.
+With a fair lock, a newly requesting thread is queued if the lock is held by another thread
+or if threads are queued waiting for the lock;
+with a non-fair lock, the thread is queued only if the lock is currently held.
+(The polled tryLock always barges, even for fair locks.)
+
+The fair locks usually have worse performance than the non-fair friends.
+The fair needs to queue and makes more context switches.
+
+=== Is there a lock for read-intensive occurences?
+
+Yes, it could be used the `ReadWriteLock` which makes mutual exclusion only for write
+operations. There could be as many as possible concurrent reading operations
+and they do not mutual exclude other read operations to proceed.
+
+The `ReadWriteLock` is defined with interface
+
+.ReadWriteLock Interface
+[source,java]
+----
+public interface ReadWriteLock {
+  Lock readLock();
+  Lock writeLock();
+}
+----
+
+NOTE: `ConcurrentHashMap`'s performance is so good that you would probably use
+it rather than approach of `ReentrantReadWriteLock` wrapping a `Map`
+if all you needed was a concurrent hash-based map,
+but the technique would be useful if you want to provide more concurrent
+access to an alternate `Map` implementation such as `LinkedHashMap`.

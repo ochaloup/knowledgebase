@@ -78,3 +78,17 @@ Policies for handler which are available are
   that means that the incoming tasks are waiting and timeouting on TCP layer
   and TCP layer is expected to throttle the number of incoming tasks.
 * `DiscardPolicy` and `DiscardOldestPolicy` : silently discards the task
+
+=== What is a `ThreadFactory` for?
+
+Thread factor is a simple interface
+
+[source,java]
+----
+public interface ThreadFactory {
+  Thread newThread(Runnable r);
+}
+----
+
+which gives an a way to wrap the thread creation. We can e.g. name the newly thread threads,
+we can make some logging or tracing etc.

@@ -1,0 +1,146 @@
+= Java Concurrency in Practice (chapter 11)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 11: Performance and Scalability
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           How to improve performance when multiple threads are used (enhancing performance is the primary goal why threads are used),
+           but some techniques increase complexity then how to handle it?
+
+=== What is a cost to use threads?
+
+Multiple threads always introduces some performance costs compared to the single-threaded approach.
+These include the overhead associated with coordinating between threads:
+locking, signaling, and memory synchronization; increased context switching; thread creation and teardown;
+and scheduling overhead.
+
+=== What is the relation between performance and scalability?
+
+Application performance can is mesured in number of ways, such as service time,
+latency, throughput, efficiency, scalability, or capacity.
+
+Scalability describes the ability to improve throughput or capacity when additional computing resources
+(such as additional CPUs, memory, storage, or I/O bandwidth) are added.
+
+For more scalable system we need parallize the effort by adding threads,
+having buffers, queues etc. for better HW utilization.
+This brings on the other side some latency and waiting time.
+
+=== What is Amdahl's law?
+
+Amdahl's law describes how much a program can theoretically be sped up by additional
+computing resources, based on the proportion of parallelizable and serial components.
+
+It says that as processor counts increase, even a small percentage of serialized execution
+limits how much throughput can be increased with additional computing resources.
+
+=== What is the cost introduced by threads?
+
+Context Switching:: for multiple runnable threads than CPUs, eventually the OS will preempt one thread
+  so that another can use the CPU. This causes a context switch, which requires saving
+  the execution context of the currently running thread and restoring the execution context of the newly scheduled thread.
+
+Memory Synchronization::  The visibility guarantees provided by `synchronized`
+  `volatile` may entail using  instructions called memory barrier that can flush
+  or invalidate caches, flush hardware write buffers, and stall execution pipelines.
+  Synchronization as well creates a traffic on the shared memory bus across all processors (which has a limited bandwidth).
+  The non-blocking algorithms usually add more communication overhead and may generate contention.
+  It's a back off for using `synchronized`.
+
+Blocking:: Uncontended synchronization can be handled entirely within the JVM. Uncontended is such synchronization
+  where the program takes a lock and does not wait for other thread to release it.
+  Contended synchronization may require OS activity. The losing thread(s) must block.
+  This blocking may be implemented via spin-waiting (repeatedly trying to acquire the lock, suitable for short time waiting)
+  or by suspending blocked thread (managed by OS, preferable for long waits).
+
+=== How to reduce the lock contention?
+
+We want the lock to be contended for not needed to block the thread and either do nothing by spin waiting
+or passing the control to OS (context switch). How to do to reduce the lock contention?
+
+* Reduce the duration for which locks are held;
+* Reduce the frequency with which locks are requested
+* Replace exclusive locks with coordination mechanisms that permit greater concurrency
+
+=== How to reduce the lock contention with lock splitting?
+
+Lock splitting means reducing lock granularity - the time when a lock is held.
+When a lock guards more than one independent variable, it may be to improve scalability
+by splitting it into multiple locks.
+
+[source,java]
+----
+public class ServerStatus {
+  @GuardedBy("this") public final Set<String> users;
+  @GuardedBy("this") public final Set<String> queries;
+  ...
+  public synchronized void addUser(String u) { users.add(u); }
+  public synchronized void addQuery(String q) { queries.add(q); }
+  public synchronized void removeUser(String u) {
+    users.remove(u);
+  }
+  public synchronized void removeQuery(String q) {
+    queries.remove(q);
+  }
+}
+
+public class ServerStatus {
+  @GuardedBy("users") public final Set<String> users;
+  @GuardedBy("queries") public final Set<String> queries;
+  ...
+  public void addUser(String u) {
+    synchronized (users) {
+      users.add(u);
+    }
+  }
+  ...
+}
+----
+
+NOTE: if the locks are too granular then it could be that compiler in some cases
+      merge the locks together for making less lock checks
+
+=== What is lock stripping?
+
+Splitting a heavily contended lock into two is likely to result in two heavily contended locks.
+Stripping means to split the lock itself to several locks.
+Each lock manages a part of the state state. For some recalulation operation, which consists
+whole state, all locks has to be held.
+
+As example could be the `ConcurrentHashMap` which uses array of 16 locks and each guards
+part of the hash bucket. On resizing the recalculation operation happens and whole map
+needs to be synchronized. But on usual put/get operations there is scalability
+improved up to 16 concurrently processed operations.
+
+=== What is a hot field?
+
+Hot fields limits scalability as they are the fields accessed by many threads
+and causes the contention.
+E.g. there could be a 'size' of a map. When it's a synchronized calculation
+then it slows down the get and set operations.
+One way it could be to create a separate field - which should not be `synchronized`
+but used like with `volatile`.
+E.g. `ConcurrentHashMap` does not use global synchronized counter but each stripe
+has its own counter synchronized with lock particular for the stripe.
+
+NOTE: If size is called frequently compared to mutative operations, striped datastructures can optimize for this
+      by caching the collection size in a `volatile` whenever size is called and
+      invalidating the cache (setting it to `-1`) whenever the collection is modified.
+      If the cached value is non negative on entry to size,
+      it is accurate and can be returned; otherwise it is recomputed.
+
+=== How to reduce the context switch overhead?
+
+Think that thread waiting operations and I/O opts probably causes a context switch.
+When it's so think to for example pass the I/O operations to a separate thread
+and do not cause the working thread to be stopped, context switched by waiting for I/O
+and returned back.
+
+Here the probability of the context switch is influenced by Java
+if it asks to suspend the thread or there is a active spinning while thread
+is not asked of suspension directly.
