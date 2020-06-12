@@ -21,7 +21,7 @@ and scheduling overhead.
 
 === What is the relation between performance and scalability?
 
-Application performance can is mesured in number of ways, such as service time,
+Application performance can is measured in number of ways, such as service time,
 latency, throughput, efficiency, scalability, or capacity.
 
 Scalability describes the ability to improve throughput or capacity when additional computing resources
@@ -44,6 +44,8 @@ limits how much throughput can be increased with additional computing resources.
 Context Switching:: for multiple runnable threads than CPUs, eventually the OS will preempt one thread
   so that another can use the CPU. This causes a context switch, which requires saving
   the execution context of the currently running thread and restoring the execution context of the newly scheduled thread.
+  And context switch means cleaning the CPU caches which causes the degradation of performance
+  as data for then new thread needs to be loaded from RAM (much slower).
 
 Memory Synchronization::  The visibility guarantees provided by `synchronized`
   `volatile` may entail using  instructions called memory barrier that can flush
@@ -144,3 +146,7 @@ and returned back.
 Here the probability of the context switch is influenced by Java
 if it asks to suspend the thread or there is a active spinning while thread
 is not asked of suspension directly.
+
+=== Why to just say no to object pooling?
+
+TODO: ...

@@ -70,8 +70,9 @@ static int xorShift(int y) {
 
 === How to test performance?
 
-In theory, developing performance tests is easyfind a typical usage scenario, write a program that executes that scenario
-many times, and time it. In practice there are many pitfalls.
+In theory, developing performance tests is easy-find a typical usage scenario,
+write a program that executes that scenario many times, and time it.
+In practice there are many pitfalls.
 
 * Garbage collection
 ** approach is to either omit running it (which is hard and need tuning of memory to fit all testing data)

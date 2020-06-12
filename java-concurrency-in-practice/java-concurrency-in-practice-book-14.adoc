@@ -1,0 +1,242 @@
+= Java Concurrency in Practice (chapter 14)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 14: Building Custom Synchronizers
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           How to build own synchronizers using low-level mechanisms?
+
+=== What is a usual structure of blocking state-dependent actions?
+
+This is a usual structure of code locking and waiting for precondition.
+
+[source]
+----
+void blockingAction() throws InterruptedException {
+  acquire lock on object state
+  while (precondition does not hold) {
+    release lock
+    wait until precondition might hold
+    optionally fail if interrupted or timeout expires
+    reacquire lock
+  }
+  perform action
+}
+----
+
+Just as each Java object can act as a lock, each object can also act as a condition queue,
+and the `wait`, `notify`, and `notifyAll` methods in `Object` constitute the API
+for intrinsic condition queues. An object's intrinsic lock
+and its intrinsic condition queue are related.
+
+Every call to  wait is implicitly associated with a specific condition predicate.
+When calling `wait` regarding a particular condition predicate,
+the caller must already **hold the lock** associated with the condition queue,
+and that lock must also  guard the state variables from which the condition predicate is composed.
+
+When we want to create a bounded queue with `notify` events we can do it like
+
+[[bounded-buffer]]
+[source,java]
+----
+public class BoundedBuffer<V> extends BaseBoundedBuffer<V> {
+  // CONDITION PREDICATE: not-full (!isFull())
+  // CONDITION PREDICATE: not-empty (!isEmpty())
+
+  public BoundedBuffer(int size) { super(size); }
+
+  // BLOCKS-UNTIL: not-full
+  public synchronized void put(V v) throws InterruptedException {
+    while (isFull())
+      wait();
+    doPut(v);
+    notifyAll();
+  }
+
+  // BLOCKS-UNTIL: not-empty
+  public synchronized V take() throws InterruptedException {
+    while (isEmpty())
+      wait();
+    V v = doTake();
+    notifyAll();
+    return v;
+  }
+}
+----
+
+Important on this operations of the `Object` condition queue is that
+`wait` action will release a lock and will be waiting to be notified.
+When some action related to the lock happens the `notify` or `notifyAll`
+is called and the `wait` is awaken.
+It's important to check the condition in cycle**!**
+When `wait` is awakened and obtains the lock we don't know if there could not be
+some other party awakened before us and if it does not do some work already
+which make the condition (e.g. `isFull()`) not valid.
+
+NOTE: Additionally, wait is even allowed to return "spuriously” not in response
+      to any thread calling notify.
+
+.Canonical Form for State-dependent Methods
+[source,java]
+----
+void stateDependentMethod() throws InterruptedException {
+  // condition predicate must be guarded by lock
+  synchronized(lock) {
+    while (!conditionPredicate())
+      lock.wait();
+    // object is now in desired state
+  }
+}
+----
+
+NOTE: if we don't go with the provided structure we are in danger of _lost notification_
+      as well. E.g. if don't check the condition predicate and will be waiting
+      then there could be nobody wakening us.
+
+=== What is difference of `Object.notify` and `Object.notifyAll`?
+
+The `notify` can be used only(!?) when both following preconditions are true
+
+* Uniform waiters. Only one condition predicate is associated with the condition queue,
+  and each thread executes the same logic upon returning from wait; and
+* One-in, one-out. A notification on the condition variable enables at most one thread to proceed.
+
+Otherwise the `notifyAll` is for to be used. When there are e.g. two different conditions
+waiting for the notification the `notify` delivers the wakening signal only to one of them.
+The precondition is checked and the thread goes to sleep again. The other is left sleeping
+(in case forever).
+
+=== How to enhance performance of `BoundedBuffer`
+
+In example <<bounded-bufffer>> the notification (the signal) is posted e.g. as well
+in case there is 3 items in buffer and 4th is added. In such case the precondition
+of `take` will not wait and the signaling may cause more processing
+and in case there are some meanwhile waiting threads (not working currently) they could
+be notified, context switched, checks the their precondition and go to sleep just intermediately.
+For this conditional notification could help - notify only when buffer was really empty.
+
+[source,java]
+----
+public synchronized void put(V v) throws InterruptedException {
+  while (isFull())
+    wait();
+  boolean wasEmpty = isEmpty();
+  doPut(v);
+  if (wasEmpty)
+    notifyAll();
+}
+----
+
+NOTE: Single notification and conditional notification are optimizations.
+      As always, follow the principle "First make it right, and then make it fast
+      if it is not already fast enough" when using these optimizations;
+      it is easy to introduce strange liveness failures by applying them incorrectly.
+
+=== Are there explicit condition objects as there are explicit `Lock` object (instead of intrinstic `synchronized` blocks)?
+
+Yes, the condition object (multiple ones) can be taken from explicit `Lock` by method
+call `Lock.newCondition`.
+
+[source,java]
+----
+public interface Condition {
+  void await() throws InterruptedException;
+  boolean await(long time, TimeUnit unit) throws InterruptedException;
+  long awaitNanos(long nanosTimeout) throws InterruptedException;
+  void awaitUninterruptibly();
+  boolean awaitUntil(Date deadline) throws InterruptedException;
+
+  void signal();
+  void signalAll();
+}
+----
+
+WARNING: The equivalents of `wait`, `notify`, and `notifyAll` for `Condition` objects
+         are `await`, `signal`, and `signalAll`. However, `Condition` extends `Object`,
+         which means that it also has `wait` and `notify` methods.
+         Be sure to use the proper versions - `await` and `signal` - instead!
+
+.BoundedBuffer with explicit Condition
+[source,java]
+----
+public class ConditionBoundedBuffer<T> {
+  protected final Lock lock = new ReentrantLock();
+  // CONDITION PREDICATE: notFull (count < items.length)
+  private final Condition notFull = lock.newCondition();
+  // CONDITION PREDICATE: notEmpty (count > 0)
+  private final Condition notEmpty = lock.newCondition();
+  @GuardedBy("lock")
+  private final T[] items = (T[]) new Object[BUFFER_SIZE];
+  @GuardedBy("lock") private int tail, head, count;
+
+  // BLOCKS-UNTIL: notFull
+  public void put(T x) throws InterruptedException {
+    lock.lock();
+    try {
+      while (count == items.length)
+        notFull.await();
+      items[tail] = x;
+      if (++tail == items.length)
+        tail = 0;
+      ++count;
+      notEmpty.signal();
+    } finally {
+      lock.unlock();
+    }
+  }
+
+  // BLOCKS-UNTIL: notEmpty
+  public T take() throws InterruptedException {
+    lock.lock();
+    try {
+      while (count == 0)
+        notEmpty.await();
+      T x = items[head];
+      items[head] = null;
+      if (++head == items.length)
+        head = 0;
+      --count;
+      notFull.signal();
+      return x;
+    } finally {
+      lock.unlock();
+    }
+  }
+}
+----
+
+=== Does Java provides some easier way for Synchronizer creation?
+
+Yes, Java gives you an abstract class for this usage:
+https://docs.oracle.com/javase/8/docs/api/java/util/concurrent/locks/AbstractQueuedSynchronizer.html[`AbstractQueuedSynchronizer`].
+
+On top of that multiple Java implementations work - e.g. `ReentrantLock`, `CountDownLatch`, `Semaphore`, `Future`...
+
+The `AbstractQueuedSynchronizer` requires implementation of the `tryAcquire` and `tryRelease`
+(with possibly to define `isHeldExclusively`) and then the `AQS` maintains int state
+which can be used with `getState()` method or `compareAndSetState` method.
+For example `tryAcquire` implementation of non-fair `ReentrantLock`
+
+[source,java]
+----
+Listing14.15.tryAcquireImplementationFromNonǦfairReentrantLock.
+protected boolean tryAcquire(int ignored) {
+  final Thread current = Thread.currentThread();
+  int c = getState();
+  if (c == 0) {
+    if (compareAndSetState(0, 1)) {
+      owner = current;
+      return true;
+    }
+  } else if (current == owner) {
+    setState(c+1);
+    return true;
+  }
+  return false;
+}
+---

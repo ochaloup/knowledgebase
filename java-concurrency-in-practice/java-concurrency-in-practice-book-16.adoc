@@ -1,0 +1,82 @@
+= Java Concurrency in Practice (chapter 16)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 16: The Java Memory Model (JMM)
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           What is the memory model needed for and how it works in Java.
+
+=== What is a memory model and why is needed?
+
+There are number of reasons when a change made by one thread might not be immediately
+visible to other threads.
+
+Compilers may generate instructions in a different order than the "obvious" one suggested by the source code,
+or store variables in registers instead of in memory; processors may execute instructions in parallel
+or out of order; caches may vary the order in which writes to variables are committed to main memory;
+and values stored in processor-local caches may not be visible to other processors.
+
+The main memory location could be stale in context of operations done
+by other threads on different processors.
+
+The JMM specifies the minimal guarantees the JVM must make about when writes
+to variables become visible to other threads.
+
+Instead we would need to use platform specific memory barriers and other platform
+specific tools the JMM defines a model for JVM independent to platform the program
+runs at.
+
+The previous chapters were describing a `race conditions` (unlucky timing of operations
+may cause other than expected results).
+There is as well `data race` where reordering of operations (not visible in the source code) may occur.
+
+A data race occurs when a variable is read by more than one thread, and written by at least one thread,
+but the reads and writes are not ordered by _happens-before_.
+
+The rules for _happens-before_ are:
+
+* *Program order rule.*
+  Each action in a thread _happens-before_ every action in that thread that
+  comes later in the program order.
+* *Monitor lock rule.*
+  An unlock on a monitor lock _happens-before_ every subsequent lock on that same monitor lock.
+* *Volatile variable rule.*
+  A write to a `volatile` field _happens-before_ every subsequent read of that same field.
+* *Thread start rule.*
+  A call to `Thread.start` on a thread _happens-before_ every action in the started thread.
+* *Thread  termination  rule.*
+  Any  action  in  a  thread  _happens-before_  any  other  thread  detects  that  thread  has
+  terminated, either by successfully return from `Thread.join` or by `Thread.isAlive` returning `false`.
+* *Interruption rule.*
+  A thread calling  interrupt on another thread _happens-before_ the interrupted thread detects the
+  interrupt (either by having `InterruptedException` thrown, or invoking `isInterrupted` or  interrupted).
+* *Finalizer rule.*
+  The end of a constructor for an object _happens-before_ the start of the finalizer for that object.
+* *Transitivity.*
+  If A _happens-before_ B, and B _happens-before_ C, then A _happens-before_ C.
+
+NOTE: explicit `Lock` has the same memory semantics as the intrinsic locks
+      and `Atomic` variables have the same memory semantics as the `volatile` variables
+
+=== How to tune the _happens-before_ ordering?
+
+If we know what we are doing we can use piggybacking on synchronization.
+
+In such case we are using the knowledge of the memory model - e.g. we know that
+everything before `volatile` write will be visible for any subsequent volatile read.
+
+For this reason the state variable can't be synchronized or `volatile` and use
+of `volatile` for another variable defined in precise source code ordering
+(this is potential danger as ordering of source code matters here)
+will cause the correct memory visibility of the non-volatile one.
+
+image::happens-before-memory-model.png[]
+
+=== How safe or improper object publication (see chapter 3) relates to JMM?
+
+TODO: ...

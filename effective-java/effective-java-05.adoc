@@ -1,0 +1,106 @@
+= Effective Java (chapter 5)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 5: Generics
+
+Problem:   What are the best practices when writing the Java program?
+           Why using generics (instead of raw types) means safer program? What are specifics of using generics in Java?
+
+=== Item 26: Why not to use the raw types?
+
+Class or interface whose declaration has one or more _type parameters_
+is a _generic_ class or interface.
+E.g. `List` interface has single type parameter `E` - `List<E>` (read _list of E_).
+The generic classes and interfaces are known as _generic types_.
+
+Generic type uses the _parametrized types_ defined in the angle-brackets
+which list the `actual type parameter` corresponding to the generic type
+(e.g. `List<String>` represents a list whose elements are of the type `String`).
+
+Each generic type defines the _raw type_ which is the name of the generic type
+used without the parametrized types - ie. raw type of `List<E>` is `List`.
+
+Using raw types is dangerous as the type is not checked during compiled time
+and it may end with runtime error.
+
+[source,java]
+----
+private final Collection stamps = ... ;
+stamps.add(new Coin( ... ));
+// emits "unchecked call" warnings
+
+// vs.
+
+private final Collection<Stamp> stamps = ... ;
+stamps.add(new Coin());
+// compile-time error 'incompatible types: Coin cannot be converted'
+----
+
+While the raw type should not be used the parametrized type allowing insertion
+of an arbitrary type is fine - like `List<Object>`.
+It's because of how generics are handled.
+While you can pass a `List<String>` to a parameter of raw type `List`,
+you can't pass it to a parameter of type `List<Object>`.
+The `List<String>` is a subtype of raw type `List` but not of the parametrized
+type `List<Object>`.
+
+To add whatever type under parametrized `List` use the _unbounded wildcard types_
+as `List<?>`.
+
+What's the difference between `List<?>` and `List`?
+You can put any element into a collection with a raw type (ie. `List`).
+This may corrupt the type invariant easily.
+You can’t put any element (other than `null`) into a `List<?>`.
+Attempting to do so will generate a compile-time error.
+(plus, you can’t assume anything about the type of the objects that you get out of the `List<?>`).
+
+==== Generics does not work for
+
+You must use raw types in class literals - `List.class`, `String[].class`, and `int.class` are all legal,
+but `List<String>.class` and `List<?>.class` are not.
+
+Because generic type information is erased at runtime(!), it is illegal to use
+the `instanceof` operator on parameterized types other than unbounded wildcard types.
+
+[source,java]
+----
+// Legitimate use of raw type - instanceof operator
+if (o instanceof Set ) { // Raw type
+  Set<?> s = (Set<?>) o; // Wildcard type
+  ...
+}
+----
+
+
+=== Item 27: why to try to eliminate all unchecked warnings?
+
+This emits unchecked conversion warning. Try to eliminate all possible occurences
+as the correct usage of generics comes with better type safety.
+
+[source,java]
+----
+Set<Lark> exaltation = new HashSet();
+
+----
+
+instead use
+
+[source,java]
+----
+Set<Lark> exaltation = new HashSet<Lark>();
+// or from Java 7 the diamond operator is available
+Set<Lark> exaltation = new HashSet<>();
+----
+
+If you can’t eliminate a warning, but you can prove that the code that provoked the warning is typesafe,
+then (and only then) suppress the warning with an `@SuppressWarnings("unchecked")` annotation.
+Use the annotation in smallest possible scope. Don't hesitate prolong your code with one more temporary local variable
+which can be annotated, instead of annotate whole methods with consisting multiple lines of code.
+
+
+=== Item 28: why to prefer lists over to arrays?

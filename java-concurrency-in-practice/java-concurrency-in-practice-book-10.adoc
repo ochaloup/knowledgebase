@@ -15,7 +15,7 @@ Problem:   The best and the bad practices in Java concurrency and parallel progr
 
 For precluding the deadlock the global order of acquiring locks has to be defined.
 
-> A program will be free of lockͲordering deadlocks if all threads acquire
+> A program will be free of lock-ordering deadlocks if all threads acquire
 > the locks they need in a fixed global order.
 
 For example example of deadlock-prone code where depends on the outer code
@@ -136,4 +136,10 @@ Java stack information for the threads listed above:
     at MumbleDBConnection.commit
     - locked <0x650f7f30> (a MumbleDBConnection)
     ...
----
+----
+
+=== How yield could be implemented?
+
+ThesemanticsofThread.yield(andThread.sleep(0))areundefined[JLS17.9];theJVMisfreetoimplementthemasnoͲopsortreat
+themasschedulinghints.Inparticular,theyarenotrequiredtohavethesemanticsofsleep(0)onUnixsystemsͲputthecurrentthreadatthe
+endoftherunqueueforthatpriority,yieldingtootherthreadsofthesamepriorityͲthoughsomeJVMsimplementyieldinthisway.

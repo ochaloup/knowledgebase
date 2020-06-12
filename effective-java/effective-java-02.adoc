@@ -1,0 +1,370 @@
+= Effective Java (chapter 2)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 2: Creating and Destroying Objects
+
+Problem:   What are the best practices when writing the Java program?
+           When and how to create an object in Java, how to ensure they are destroyed and their clean-up is made?
+
+[[item1-factory-methods]]
+=== Item 1: What are benefits of using static factory methods instead of constructors?
+
+The factory method is an alternative to get a (new) instance of an object.
+It's as well e.g. part of singleton pattern and where it's used like `getInstance(...)`
+
+[source,java]
+----
+public static Boolean valueOf(boolean b) {
+  return b ? Boolean.TRUE : Boolean.FALSE;
+}
+----
+
+NOTE: factory methods are different from the Factory Method design pattern of GoF.
+
+The benefits are:
+
+* They have names
+** it's easier to understand how the object is created e.g. `BigInteger(int,int,Random)`
+   vs `BigInteger.probablePrime(int,int,Random)`
+** names does not force to override the constructors with multiple variants of ordered
+   arguments
+* They do not need to create new instance every time
+** that's good for e.g. singletons, caching, etc.
+   (classes which do this are named as _instance-controlled_)
+* They may return an object of any subtype of their return type
+** e.g. they may return the interface
+** they may hide an implementation to an inner class and create a compact API
+** the compact API uses e.g. `java.util.Collections` (by convention the set
+  of static constructors for a `Type` is put to class named `Types`). It's easier
+  for programmer to check a 40+ static method names than search through 40+ independent
+  implementations of the `Collection` interface
+  (note: Java 8 provides the default methods for interfaces and from that time
+    it's not necessary to provide such noninstantiable companion classes)
+* They may return a different backend instance type in dependence of the input parameters
+** e.g. `EnumSet` may be backed by `long` or when provided with more than 60 params then it's `JumboEnumSet`
+* The returned instance could not exist at time the factory method is written
+** e.g. some JDBC implementation (`Driver.registerDriver`), or `service provider interface`
+
+The shortcomings are:
+
+* a class without `public` or `protected` constructor cannot be subclassed
+* they are hard to find for programmers
+
+Common names for static factory methods
+
+* `from` - a type conversion method
+* `of` - an aggregation method taking multiple params
+* `valueOf` - verbose alternative to `from` and `of`
+* `instanceOf` - returns an instance
+* `create`, `newInstance` - as `insanceOf` but it's guaranteed that really a new instance is created
+* `get`_Type_, `new`_Type` - as `instanceOf`/`create` but for factory method in a different class
+* `type` - consciese alternative to `get`_Type_
+
+=== Item 2: What to do with constructors with many parameters?
+
+The same pitfall shares the factory methods <<item1-factory-methods>>.
+
+A chance is to use the JavaBeans with notation
+
+[source,java]
+----
+NutritionFacts cocaCola = new NutritionFacts();
+cocaCola.setServingSize(240);
+cocaCola.setServings(8);
+cocaCola.setCalories(100);
+...
+----
+
+A disadvantage is that the object may be taken when not fully initialized.
+
+Use builder.
+
+[source,java]
+----
+public class NutritionFacts {
+    private final int servingSize;
+    private final int servings;
+    private final int calories;
+    private final int fat;
+    private final int sodium;
+    private final int carbohydrate;
+
+    public static class Builder {
+        // Required parameters
+        private final int servingSize;
+        private final int servings;
+        // Optional parameters - initialized to default values
+        private int calories = 0;
+        ...
+
+        public Builder(int servingSize, int servings) {
+        }
+
+        public Builder calories(int val) {
+            calories = val;
+            return this;
+        }
+
+        ...
+
+        public NutritionFacts build() {
+            return new NutritionFacts(this);
+        }
+    }
+
+    private NutritionFacts(Builder builder) {
+        servingSize = builder.servingSize;
+        servings = builder.servings;
+        calories = builder.calories;
+        ...
+    }
+}
+
+NutritionFacts cocaCola = new NutritionFacts.Builder(240,8)
+  .calories(100).build();
+----
+
+* Builder uses _fluent_ API, simulates named optional parameters (as e.g. Python or Scala offer)
+* It could be good for class hierarchies (need to use _generic type with a recursive type parameter_,
+  Java lacks a self type and this workaround is known as the _simulated self-type_ idiom)
+
+Disadvantages could be
+
+* for creating an object you first need to create a builder; it could be an issue for performance critical applications
+* it's verbose than the simple (telescoping) constructor
+
+=== Item 3: What are the ways to implement singleton?
+
+NOTE: making a class a singleton can make it difficult to test its clients
+
+First approach, using property
+
+[source,java]
+----
+public static final Elvis INSTANCE = new Elvis();
+private Elvis() {...}
+----
+
+There is possible to use `AccesibleObject.setAccessible` on the private constructor.
+To defend against it it's needed to throw an exception in constructor when asked
+to be constructed for the second time.
+
+Second approach, using factory method
+
+[source,java]
+----
+private static final Elvis INSTANCE = new Elvis();
+private Elvis() {...}
+public static Elvis getInstance() {return INSTANCE;}
+----
+
+This is good when we don't want the singleton anymore the factory method may be changed.
+The method reference may be used as a suppliere.g. `Elivs::instance` is a `Supplier<Elvis>`
+
+Any of these two approaches do not solve issue on making the singleton `Serializable`.
+If so it's needed to mark all field `transient` and provide `readResolve` method.
+
+[source,java]
+----
+// readResolve method to preserve singleton property
+private Object readResolve() {
+  // Return the one true Elvis and let the garbage collector
+  // take care of the Elvis impersonator.
+  return INSTANCE;
+}
+----
+
+Third approach, using enum
+
+[source,java]
+----
+// Enum singleton - the preferred approach
+public enum Elvis {
+  INSTANCE;
+}
+----
+
+The enum may have declared methods.
+It solves issue with serialization as well.
+This approach can't be used when the singleton must extend a superclass (other than Enum).
+
+=== Item 4: How to write an utility class correctly?
+
+There is example of _utility classes_ which makes sense. E.g. `java.util.Arrays` (`Math`, `Colletions`)
+It's a set of methods related to some functionality.
+The _utility classes_ is meant not to be instantiated. That's the point to make constructor `private`.
+
+A side effect is that the class can't be subclassed.
+All constructors must invoke a superclass constructor, explicitly or implicitly,
+as there is no accessible superclass constructor now.
+
+[source,java]
+----
+// Noninstantiable utility class
+public class UtilityClass {
+  // Suppress default constructor for noninstantiability
+  private UtilityClass() { throw new AssertionError(); }
+}
+----
+
+NOTE: `AssertionError` is not required but it could be considered for defend the "reflection attack"
+
+NOTE: from Java 8 there are default methods as methods which may be put to interface
+
+=== Item 5: Why to prefer dependency injection over the singleton and static utility classes?
+
+* Inappropriate use of the singleton is inflexible and untestable
+
+Static utility classes and singletons are inappropriate for classes whose behavior is parametrized by an underlying resource.
+Pass the resource into constructor when creating a new instance instead.
+
+There are various dependency injection framework as Dagger, Guice or Spring that could be used.
+
+=== Item 6: Why to avoid unnecessary objects?
+
+Avoid creation of unnecessary objects is mostly used for improving performance.
+
+Simple objects should not be reused or having a pool of objects is a bad(*!*) practice
+in general.
+
+But objects which are well-known to consider for reusing them:
+
+* use `Pattern` rather than `String.matches(...)` (matches creates `Pattern` in background on every call)
+* think when using automatic unboxing (use rather primitive types than the boxed one,
+  do not mix the boxed and unboxed, watch out for unintentional autoboxing)
+
+=== Item 7: How memory leaks may happen in Java?
+
+Java is automaticall garbage collected but there could be still a memory leak.
+It happens when object reference is stored somewhere and not cleaned, aka not set to `null`.
+
+The crucial point is check when the object is `null` only for objects which manages
+the memory (caches, stacks, listeners).
+For simple objects is overhead to manually set them to `null` and it's a bad practice(*!*).
+
+E.g. the example of the memory leak where the stack maintains the references
+and does not `null` them when shrinks the stack size
+
+[source,java]
+----
+public class Stack {
+  private Object[] elements;
+  private int size = 0;
+  private static final int DEFAULT_INITIAL_CAPACITY = 16;
+
+  public Stack() {
+    elements = new Object[DEFAULT_INITIAL_CAPACITY];
+  }
+  public void push(Object e) {
+    ensureCapacity();
+    elements[size++] = e;
+  }
+  public Object pop() {
+    if (size == 0) throw new EmptyStackException();
+    return elements[--size];
+  }
+  /** roughly doubling the capacity each time the array needs to grow. */
+  private void ensureCapacity() {
+    if (elements.length == size)
+      elements = Arrays.copyOf(elements, 2 * size + 1);
+  }
+}
+----
+
+The fix is to add to `pop()` method (before `return`) the call of `elements[size] = null;`
+
+NOTE: you may consider use of `WeakHashMap` for some 'caching' purposes.
+      The item happens to be automatically obsolete when there is no external(!) reference to item.
+
+=== Item 8: Why to avoid finalizers and cleaners?
+
+Cleaners and finalizers are not ensured to be really called. There is a finalizers
+thread which has low priority and finalizing the stuff may take time.
+
+The cleaners has its thread as well.
+The cleaning action is a `Runnable` to be invoked at most once when the object
+has become phantom reachable unless it has already been explicitly cleaned.
+
+Other troubles:
+
+* The finalizers are not ensured to be called when `System.runFinalization` or `System.gc` is called
+* Methods `System.runFinalizersOnExit` and `Runtime.runFinalizersOnExit` are flawed and do not work
+* Performance penalty to force finalizers (50 times slower than explicit `try-with-resources`)
+* Security problem - _finalizers attack_ (when constructor throws exception then
+  malicious subclass may create finalizers which has access to a partially constructed
+  object and may call methods that would never be allowed normally. Defense when
+  constructor throws the exception - create `final` `finalize` method in class.)
+* Exception from cleaner/finalizers are swallowed
+
+
+. Finalizer example
+[source,java]
+----
+@Override
+public void finalize() {
+  try {
+    reader.close();
+    System.out.println("Closed BufferedReader in the finalizer");
+  } catch (IOException e) {
+      // ...
+  }
+}
+----
+
+. Cleaner example
+[source,java]
+----
+// An autocloseable class using a cleaner as a safety net
+public class Room implements AutoCloseable {
+  private static final Cleaner cleaner = Cleaner.create();
+
+  // Resource that requires cleaning. Must not refer to Room!
+  private static class State implements Runnable {
+    int numJunkPiles;
+    // Number of junk piles in this room
+    State(int numJunkPiles) {
+      this.numJunkPiles = numJunkPiles;
+    }
+    // Invoked by close method or cleaner
+    @Override public void run() {
+      System.out.println("Cleaning room");
+      numJunkPiles = 0;
+    }
+  }
+
+  // The state of this room, shared with our cleanable
+  private final State state;
+  // Our cleanable. Cleans the room when it’s eligible for gc
+  private final Cleaner.Cleanable cleanable;
+  public Room(int numJunkPiles) {
+    state = new State(numJunkPiles);
+    cleanable = cleaner.register(this, state);
+  }
+  @Override public void close() {
+    cleanable.clean();
+  }
+}
+----
+
+*Use* `try-finally` or `try-with-resources` instead.
+
+=== Item 9: Why to prefer `try-with-resources` to `try-finally`
+
+It's easy to write `try-finally` is ugly, especially with more than on resource,
+and is not hard to write it wrong.
+
+.Example two resources
+[source,java]
+----
+try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst)) {
+  byte[] buf = new byte[BUFFER_SIZE];
+  int n;
+  while ((n = in.read(buf)) >= 0)
+    out.write(buf, 0, n);
+}
+----

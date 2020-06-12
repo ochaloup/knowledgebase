@@ -1,0 +1,501 @@
+= Effective Java (chapter 4)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 4: Classes and Interfaces
+
+Problem:   What are the best practices when writing the Java program?
+           How to write usable, robust and flexible classes and interfaces?
+
+
+=== Item 15: Why to minimize accessibility of classes and members?
+
+Limitation of accessibility makes easier to decouple components and develop, test, optimize...
+them in isolation. The fixes and debugging is easier.
+
+In Java the level of accessibility for an entity is defined by its location
+and by use of one (if any) of the three modifier: `private`, `protected`, `public`.
+
+The rule of thumb is simple: make each class or member as inaccessible as possible.
+
+For top-level (non-nested) classes and interfaces there are two possible access levels:
+with `public` modifier they are public; otherwise they are `package-private`.
+
+For members (fields, methods, nested-classes/interfaces) there are four possible access levels:
+`private`, `package-private`, `protected`, `public`.
+
+* Both `private` and `package-private` members are part of a class's implementation
+and do not normally impact its exported API.
+* A `protected` member is part of the class’s exported API and must be supported forever.
+  The `protected` member of an exported class represents a public commitment to an implementation detail.
+* Instance fields of `public` classes should rarely be `public`.
+  And classes with `public` mutable fields are not generally thread-safe.
+
+NOTE: a nonzero-length array is always mutable, so it is wrong for a class to have
+      a `public static final` array field, or an accessor that returns such a field.
+
+From Java 9 there are two additional access levels introduced with the module system.
+`Public` and `protected` members of _unexported packages_ in a module are inaccessible outside the module;
+within the module, accessibility is unaffected by export declarations.
+Using the module system allows you to share classes among packages within a module
+without making them visible to the entire world.
+
+NOTE: A module is a grouping of packages, like a package is a grouping of classes.
+      A module may explicitly export some of its packages via export declarations in its module declaration
+      (in a source file `module-info.java`).
+
+
+=== Item 16: Why not to use public fields in public classes?
+
+[source,java]
+----
+// Degenerate classes like this should not be public
+class Point {
+  public double x;
+  public double y;
+}
+----
+
+Because the data fields of such classes are accessed directly,
+these classes do not offer the benefits of encapsulation!
+Making them public we are loosing flexibility to change the class's internal representation.
+
+If a class is accessible outside its package, provide accessor methods
+aka. use `private` fields and _setters_ and _getters_.
+
+NOTE: if a class is `package-private` or is a `private nested class`,
+      there is nothing inherently wrong with exposing its data fields
+
+
+=== Item 17: Why to minimize mutability?
+
+An immutable class is simply a class whose instances cannot be modified.
+
+Immutable classes are easier to design, implement, and use than mutable classes.
+ => Immutable objects are simple.
+They are less prone to error and are more secure.
+ => Immutable objects are inherently thread-safe; they require no synchronization.
+
+NOTE: The Java platform libraries contain many immutable classes,
+      including `String`, the boxed primitive classes, and `BigInteger` and `BigDecimal`
+
+To make a class immutable:
+
+. Don't provide methods that modify the object's state
+. Ensure that the class can't be extended - to prevent careless or malicious subclasses to break immutability
+. Make all fields final - ensuring the behavior on instance is passed from one thread to another
+. Make all fields private - prevents clients to modify object directly
+. Ensure exclusive access to any mutable components - make defensive copies in constructors, accessors and `readObject`
+
+
+The major _disadvantage_ of immutable classes is that they require a separate object
+for each distinct value.
+For normal objects it's not a trouble for memory intensive or for a multistep operation
+that generates a new object at every step, that could be an issue.
+
+Option to solve is a `package-private` mutable companion class which is used to perform
+complex operations on the immutable class.
+E.g. `StringBuilder` (or the obsolete `StringBuffer`) as companion for `String`.
+
+==== Designing alternatives to make the class immutable
+
+On not permitting subclassing:: can be done by making the class `final`
+  but you can make all of its constructors `private` or `package-private`
+  and add public static factories in place of the public constructors (link:./effective-java-02.adoc[(Item 1)])
+  (it may give us a chance to tune the performance by caching)
+
+All fields should be final:: this is usually not necessary and the important point
+  on this rule is that _no method may produce an externally visible change in the object's state_.
+  And it's ok for an immutable class to have one or more `nonfinal` fields in which
+  they cache the results of expensive computations (e.g. `hashCode` or lazy intialization).
+
+Nonfinal fields and concern of `Serializable`:: when class implements it and there is a mutable field
+  in the class then explicit `readObject` and `readResolve` has to be provided.
+
+
+=== Item 18: Why to favor composition over inheritance?
+
+Because unlike method invocation, inheritance violates encapsulation.
+A subclass depends on the implementation details of its superclass for its proper function.
+The superclass may change from release to release and it may break the functionality of the subclass.
+
+Instead of extending an existing class, give your new class a private field
+that references an instance of the existing class and use composition.
+
+[source,java]
+----
+// Reusable forwarding class
+public class ForwardingSet<E> implements Set<E> {
+  private final Set<E> s;
+  public ForwardingSet(Set<E> s) {
+    this.s = s;
+  }
+  ...
+}
+----
+
+NOTE: This approach is known as a wrapper because the instance contains ("wraps") another `Set` instance.
+  It's also known as _Decorator pattern_ because class `decorates` the original calls.
+  Sometimes the combination of _composition and forwarding_ is loosely referred to as _delegation_.
+  Technically it's not delegation unless the wrapper object passes itself to the wrapped object.
+
+Disadvantages of the wrapper approach are few.
+One caveat is that wrapper classes are not suited for use in _callback frameworks_ -
+objects pass self-references to other objects for subsequent invocations - "callbacks".
+The wrapped object doesn't know of its wrapper, it passes a reference to itself (`this`)
+and callbacks elude the wrapper. This is known as the _SELF_ problem.
+
+Then people worry about performance impact or memory footprint.
+Neither turn out to have much impact in practice. It’s tedious to write forwarding methods,
+but you have to write the reusable forwarding class for each interface only once,
+and forwarding classes may be provided for you.
+
+NOTE: There is one last set of questions you should ask yourself before deciding to use inheritance
+  in place of composition. Does the class that you contemplate extending have any flaws in its API?
+  If so, are you comfortable propagating those flaws into your class's API?
+  Inheritance propagates any flaws in the superclass's API, while composition lets
+  you design a new API that hides these flaws.
+
+
+=== Item 19: Why to prohibit inheritance when the class is not designed for it?
+
+Designing of a class without thinking about inheritance and making it subclass-able
+is dangerous. If inheritance is permitted it has to be well-documented
+(For each public or protected method, the documentation must indicate which overridable methods
+ the method invokes, in what sequence, and how the results of each invocation affect subsequent processing.)
+
+E.g. see as a good example the link:https://docs.oracle.com/javase/7/docs/api/java/util/AbstractCollection.html#remove(java.lang.Object)[AbstractCollection$remove()]
+where it's said about iteration etc.
+
+NOTE: The only way to test a class designed for inheritance is to write subclasses.
+
+To design the a class well for subclassing there are few more points to consider
+
+==== Constructors must not invoke overridable methods (directly or indirectly).
+
+[source,java]
+----
+public class Super {
+  // Broken - constructor invokes an overridable method
+  public Super() { overrideMe(); }
+  public void overrideMe() { }
+}
+
+public final class Sub extends Super {
+  // Blank final, set by constructor
+  private final Instant instant;
+  Sub() { instant = Instant.now(); }
+  // Overriding method invoked by superclass constructor
+  @Override public void overrideMe() { System.out.println(instant); }
+
+  public static void main(String[] args) {
+    Sub sub = new Sub();
+    sub.overrideMe();
+  }
+}
+----
+
+This example prints the "instant" only once as the call on `overrideMe` in `Super`
+constructor means to use not instantiated subclass instance where `Instant` is `null`
+(the first `println` prints `null` the second then prints `instant`).
+
+NOTE: it is safe to invoke `private` methods, `final` methods, and `static` methods,
+      none of which are overridable, from a constructor
+
+==== The `Cloneable` and `Serializable` interfaces present special difficulties when designing for inheritance
+
+The `clone` and `readObject` methods behave a lot like constructors, a similar restriction applies:
+neither `clone` nor `readObject` may invoke an overridable method, directly or indirectly.
+
+In the case of `readObject`, the overriding method will run before the subclass’s state has been deserialized.
+In the case of `clone`, the overriding method will run before the subclass's clone method
+has a chance to fix the clone’s state.
+
+If you decide to implement `Serializable` in a class designed for inheritance
+and the class has a `readResolve` or `writeReplace` method, you must make the `readResolve` or `writeReplace`
+method `protected` rather than `private`. If these methods are `private`,
+they will be silently ignored by subclasses.
+
+
+=== Item 20: Why to prefer interfaces over abstract classes?
+
+NOTE: with interface `default methods` both mechanism provides a way to provide
+      an implementations for some instance methods
+
+Drawback of abstract classes: Java permits only single inheritance then extending
+a class severely constraints their use as type definition.
+
+If you want to have two classes extend the same abstract class,
+you have to place it high up in the type hierarchy where it is an ancestor of both classes.
+Unfortunately, this can cause great collateral damage to the type hierarchy, forcing all
+descendants of the new abstract class to subclass it, whether or not it's appropriate.
+
+Interfaces enable safe, powerful functionality enhancements via the wrapper class idiom (see _Item 18_).
+
+Or better, you may combine the advantage of interfaces and abstract classes by providing
+an _abstract skeletal implementation class_ to go with an interface.
+
+The `interface` defines the type, perhaps providing some default methods,
+while the _skeletal implementation class_ implements the remaining non-primitive interface methods
+atop the primitive interface methods.
+By convention _skeletal implementation classes_ are called *Abstract*_Interface_.
+
+For example, here’s a static factory method containing a complete, fully functional `List` implementation atop `AbstractList`
+
+[source,java]
+----
+// Concrete implementation built atop skeletal implementation
+static List<Integer> intArrayAsList(int[] a) {
+  Objects.requireNonNull(a);
+
+  return new AbstractList <> () {
+    @Override public Integer get(int i) {
+      return a[i]; // Autoboxing ( Item 6 )
+    }
+    @Override public Integer set(int i, Integer val) {
+      int oldVal = a[i]; // Auto-unboxing
+      a[i] = val; // Autoboxing
+      return oldVal;
+    }
+    @Override public int size() { return a.length; }
+   };
+ }
+----
+
+NOTE: Incidentally, this example is an _Adapter_ that allows an int array to be viewed as a list of Integer instances.
+      Because of all the translation back and forth between int values and Integer instances (boxing and unboxing),
+      its performance is not terribly good.
+
+NOTE: the implementation takes the form of an anonymous class (_Item 24_).
+
+The class implementing the interface can forward invocations of interface methods
+to a contained instance of a private inner class that extends the skeletal implementation.
+This technique, known as simulated multiple inheritance, is closely related to the wrapper class idiom.
+
+To summarize, an interface is generally the best way to define a type that permits multiple implementations.
+If you export a nontrivial interface, you should strongly consider providing a skeletal implementation to go with it.
+
+
+=== Item 21: why the `default` interface method does not fix a wrong interface design for you?
+
+Even the Java added the `default` interface method to allow addition of methods to existing interfaces
+it's fraught with risk.
+
+It is not always possible to write a default method that maintains all invariants of every conceivable implementation.
+For example default method added to `Collection` interface in Java 8
+
+[source,java]
+----
+default boolean removeIf(Predicate<? super E> filter) {
+  Objects.requireNonNull(filter);
+  boolean result = false;
+  for (Iterator<E> it = iterator(); it.hasNext(); ) {
+    if (filter.test(it.next())) {
+      it.remove();
+      result = true;
+    }
+  }
+  return result;
+}
+----
+
+This is quite generic but it fails with some real implememntations of the `Collection` interface.
+E.g. `org.apache.commons.colletions4.colletion.SynchronizedCollection`. This implementation
+provides ability to use client-supplied object for locking. It's a wrapper over `Collection`
+methods. With this the `removeIf` is not wrapped by locking until the implementor
+changes it (which was not true at the time of book writing). So the `removeIf`
+just does not maintain invariant of the `SynchronizedCollection` class.
+
+In the presence of default methods, existing implementations of an interface
+may compile without error or warning but fail at runtime.
+Even though default methods are now a part of the Java platform,
+it is still of the utmost importance to design interfaces with great care.
+While it may be possible to correct some interface flaws after an interface is released,
+you cannot count on it.
+
+NOTE: It is critically important to test each new interface before you release it.
+      Multiple programmers should implement each interface in different ways.
+      At a minimum, you should aim for three diverse implementations.
+
+
+=== Item 22: why interfaces should not be used merely to export constants?
+
+When a class implements an interface, the interface serves as a type that can be used to refer
+to instances of the class. It says what a client can do with instances of the class.
+It is inappropriate to define an interface for any other purpose.
+
+E.g. do not use so called _constant interfaces_. It's interface containing only `static final` fields.
+
+[source,java]
+----
+public interface PhysicalConstants {
+  // Avogadro's number (1/mol)
+  static final double AVOGADROS_NUMBER = 6.022_140_857e23;
+  // Boltzmann constant (J/K)
+  static final double BOLTZMANN_CONSTANT = 1.380_648_52e-23;
+}
+----
+
+If you want to export constants, there are several reasonable choices.
+If the constants are strongly tied to an existing class or interface,
+you should add them to the class or interface (e.g. `Integer.MIN_VALUE`).
+
+If the constants are best viewed as members of an enumerated type,
+you should export them with an `enum` type (_Item 34_).
+
+Otherwise, you should export the constants with a noninstantiable utility class (_Item 4_).
+
+
+=== Item 23: why to prefer class hierarchy over tagged classes?
+
+For a classes which can come with several flavours use hierarchy. E.g. a class
+capable to represent a circle or a rectangle.
+
+[source,java]
+----
+// Tagged class - vastly inferior to a class hierarchy!
+class Figure {
+  enum Shape { RECTANGLE, CIRCLE };
+  // Tag field - the shape of this figure
+  final Shape shape;
+  // These fields are used only if shape is RECTANGLE
+  double length; double width;
+  // This field is used only if shape is CIRCLE
+  double radius;
+  // Constructor for circle
+  Figure(double radius) { shape = Shape.CIRCLE; this.radius = radius; }
+  // Constructor for rectangle
+  Figure(double length, double width) {
+    shape = Shape.RECTANGLE; this.length = length; this.width = width;
+  }
+
+  double area() {
+    switch(shape) {
+      case RECTANGLE:
+        return length * width;
+      case CIRCLE:
+        return Math.PI * (radius * radius);
+      default: throw new AssertionError(shape);
+    }
+  }
+}
+----
+
+In short, the tagged classes are verbose, error-prone and inefficient. Use class hierarchy instead.
+
+[source,java]
+----
+abstract class Figure {
+  abstract double area();
+}
+
+class Circle extends Figure {
+  final double radius;
+  Circle(double radius) {
+    this.radius = radius;
+  }
+  @Override double area() { ... }
+}
+class Rectangle extends Figure {
+  ...
+}
+----
+
+
+=== Item 24: Why to use `static` nested classes whenever possible?
+
+The java provides four types of nested classes: _static member class_, _nonstatic member class_,
+_anonymous class_, _local class_.
+
+All but the first kind are _inner classes_.
+
+_static member class_::
+  It's and ordinary class that happens to be declared inside another class and had access
+  to all of the enclosing class's members (even `private` ones).
+  It's a static member of the enclosing class and obeys all visibility restrictions
+  (ie. if it's defined `private` itself it's accessible only within the enclosing class). +
+  *Usage:* helper classes (e.g. enum describing supported calculations of `Calculator` class,
+    then `Calculator.Operations` are to be static nested enum) or builder classes.
+
+_nonstatic member class_::
+  each instance of non-static is implicitly associated with the enclosing instance of its containing class.
+  It's not possible to create instance of the nonstatic member class without an enclosing instance.
+  Always there is created hidden extraneous _link reference field_ pointing from the nested class to the enclosing instance. +
+  Normally the association to the enclosing instance is established automatically by
+  calling constructor of the nested class. Rarely it could be done manually by invocation
+  `enclosingInstance.new MemberClass(args)`. +
+  *Usage*: to define _Adapter_ pattern - an instance of the outer class to be viewed of some unrelated class
+  (e.g. `Map#entrySet` returns `Set` or `Set/List#iterator` returns `Iterator`).
+
+WARNING: If you declare a member class that does not require access to an enclosing instance,
+         always put the static modifier in its declaration.
+         As non-static member class owns hidden reference to enclosing instance
+         it may protect GC to run and to cause the memory leak to happen.
+
+_anonymous class_::
+  Has no name, it's not a member of the enclosing class.
+  It's declared and instantiated at the point of use and is permitted at any point in the code
+  where an expression is legal.
+  It has enclosing instances if and only if they occur in a nonstatic context. +
+  *Limitations:* +
+  It cannot have any `static` members other than _constant variables_ (final primitive or `String` fields). +
+  The `instanceof` test can't be performed. +
+  Multiple interfaces can't be implemented by the anonymous class. +
+  *Recomendation:* +
+  It should be short or readability will suffer.
+  *Usage:* before _lamdas_ it was means of creating small _function_ objects
+  (now lambdas are preffered) +
+  another common use case is implementation of static factory methods (_Item 20_)
+
+_local class_::
+  Can be delcared anywhere where a local variable can be declared.
+  Like member classes, they have names and can be used repeatedly.
+  Like anonymous classes, they have enclosing instances only if they are defined in a nonstatic context,
+  and they cannot contain static members.
+  And like anonymous classes, they should be kept short so as not to harm readability.
+
+
+NOTE: there are as well hidden `Unsafe::.defineAnonymousClass`/`Lookup::defineHiddenClass` classes
+      defined for purposes of framework. These classes are in standard bytecode class formats
+      and are not(?) accesible by reflection, see more at https://blogs.oracle.com/javamagazine/the-unsafe-class-unsafe-at-any-speed#anchor_5
+
+
+=== Item 25: why to limit one class definition per a source file?
+
+./tmp/source/Main.java
+[source,java]
+----
+public class Main {
+  public static void main(String[] args) {
+    System.out.println(Utensil.NAME + Dessert.NAME);
+  }
+}
+----
+
+./tmp/source/Utensil.java
+[source,java]
+----
+class Utensil { static final String NAME = "pan"; } class Dessert { static final String NAME = "cake"; }
+----
+
+./tmp/source/Desert.java
+[source,java]
+----
+class Utensil { static final String NAME = "pot"; } class Dessert { static final String NAME = "pie"; }
+----
+
+On running `javac Dessert.java Main.java` gets a different output - a different behaviour
+- against when the compiled with `javac Utensil.java Main.java`.
+
+NOTE: `javac Main.java Desert.java` fails as `javac` is parsed first and with `Untensil.NAME`
+      it tries to find `Utensil.java` and later the `Desert.java` compilation fails on duplicated definitions.
+
+Never put multiple top-level classes or interfaces in a single source file.
+Following this rule guarantees that you can’t have multiple definitions for a single class
+at compile time. This in turn guarantees that the class files generated by compilation,
+and the behavior of the resulting program,
+are independent of the order in which the source files are passed to the compiler.

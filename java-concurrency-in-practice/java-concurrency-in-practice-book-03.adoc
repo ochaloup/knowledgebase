@@ -148,6 +148,11 @@ An object is immutable if:
 * all fields are final
 * it's properly constructed and the `this` reference does not escape during the construction
 
+NOTE: Java's primitive wrappers are written in stone. When an Integer instance is created,
+      you cannot change its value. The `Integer`, `String`, `Float`, `Double`, `Byte`, `Long`,
+      `Short`, `Boolean`, and `Character` classes are all examples of an immutable class.
+      Second, an immutable object is intrinsically thread safe.
+
 === What are rules for safe publication of a mutable objects?
 
 Objects which are not immutable needs to be safely published to be safe from other thread modifications.

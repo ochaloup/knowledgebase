@@ -1,0 +1,222 @@
+= Effective Java (chapter 3)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 3: Methods common to all Objects
+
+Problem:   What are the best practices when writing the Java program?
+           What contracts shares all java Objects as they are inheritted from `Object`
+           class and they may work with its nonfinal methods (`equals`,`hashCode`,`toString`,`clone`,`finalize`)?
+
+=== Item 10: Why not override `equals`
+
+It's easy to override `equals` but it's way easier to write it wrong.
+The easiest way to avoid problems is not to override it. Then each instance
+of the class is equal only to itself.
+
+When it's appropriate to override `equals`? When class has notion of _logical equality_
+and the superclass does not solve the trouble of implementing it for us.
+
+When implementing the `equals` there has to be considered to not break the equivalence
+relation properties: reflexive `x.equals(x) == true`, symmetric `x.equals(y) == y.equals(x)`,
+transitive `x.equals(y) == true, y.equals(z) == true => x.equals(z) == true`,
+consistent (result is not changed during time arbitrarily), `x.equals(null)` returns false
+
+E.g. symmetry can be violated with something like this
+
+[source,java]
+----
+public final class CaseInsensitiveString {
+  private final String s;
+  ...
+  // Broken - violates symmetry!
+  @Override public boolean equals(Object o) {
+    if (o instanceof CaseInsensitiveString)
+      return s.equalsIgnoreCase( ((CaseInsensitiveString) o).s);
+      if (o instanceof String) // One-way interoperability!
+      return s.equalsIgnoreCase((String) o);
+      return false;
+  }
+}
+----
+
+The well-intentioned `equals` method naively attempts to interoperate with strings.
+But the `String.equals(CaseInsensitiveString)` is false while `CaseInsensitiveString.equals(String)` is true.
+
+What to do to write a good `equals` method?
+
+* Always override hashCode when you override equals (Item 11)
+* Don’t try to be too clever (e.g. `File` symbolic link really should not be equal to the real file)
+* Don’t substitute another type for Object in the equals declaration. (don't do `public boolean equals(MyClass o) ...`)
+* Consider using IDE or google's https://github.com/google/auto/tree/master/value[AutoValue] to generate equals automatically
+
+=== Item 11: Why to override `hashCode` when `equals` is overridden
+
+The base rule is `hashCode` has to be overriden in every class that overrides `equals`.
+And the `equals` objects must(!) have equal hash codes.
+On the other hand the objects with equal hash codes don't need to be `equals`.
+
+The most important places where the `hashCode` is used is in `HashMap`. `HashMap` checks
+the `hashCode` and based on that it put to a bucket. If there are two object instances
+which has got the same `hashCode` results then `equals` is invoked and if not returning `true`
+then the objects are placed into a linear list.
+If `hashCode` is not overriden it can easily happen that the logically equal objects
+will be taken as different when `HashMap` is used and the results could lead to a wrong
+business code interpretations which are hard to debug.
+
+Writing a good hash code https://www.baeldung.com/java-hashcode#standard-hashcode-implementations[has got some rules]
+(or check the book) and an example of a good `hashCode` function is
+
+[source,java]
+----
+@Override public int hashCode() {
+  int result = Short.hashCode(areaCode);
+  result = 31 * result + Short.hashCode(prefix);
+  result = 31 * result + Short.hashCode(lineNum);
+  return result;
+}
+----
+
+NOTE: using the one-line function `return Objects.hash(lineNum, prefix, areaCode)`
+      is possible but it's not recommended as it has worse performance against
+      the explicit `hashCode` above. It's slower because the object of array has to be
+      created on the call of the multi-parameter function and the primitive types
+      will be automatically boxed and un-boxed.
+
+It's not a good idea to provide a detailed explanation in javadoc how the hash code
+is calculated as it's harder to be changed in future.
+
+Don't be tempted to exclude significant fields from the has code computation to improve
+performance. E.g. before Java 5 the `String.hashCode` was using only first 16 characters
+for computations and for longer objects based on the String (e.g. URLs) it meant
+a bad performance behavior when used in `HashMap`.
+
+=== Item 12: Why to override the `toString`
+
+The overriding `toString` is not so important as for `equals/hashCode` but it's
+good for any logging usage to provide descriptive information about the object
+than just `PhoneNumber@adbbd` which is the default `Object.toString` implementation.
+
+Some link:https://docs.oracle.com/javase/7/docs/api/java/math/BigInteger.html#toString()[classes decides to define format]
+of the `String` returned by `toString`.
+Then it's important to be backward compatible and expect developers start to work with it.
+If the format is defined it's beneficial to provide a method/constructor which
+link:https://docs.oracle.com/javase/7/docs/api/java/math/BigInteger.html#BigInteger(java.lang.String)[parses the `String`]
+in such a format and creates the object.
+
+The javadoc of `toString` should provide intention of the returned `String`
+(it's only informal, it has precise format, it's a subject to change etc.)
+
+The class should provide programmatic access to all fields printed in `toString`
+to not force developers to parse the `toString` to get the value.
+
+=== Item 13: Why to re-consider implementing `clone`
+
+The link:https://docs.oracle.com/javase/8/docs/api/java/lang/Object.html#clone--[`Object.clone()`] is a way
+how any object could be cloned.
+
+The `clone()` method is protected in the `Object` and its behaviour is driven by the fact
+if the class implements the marker interface https://docs.oracle.com/javase/9/docs/api/java/lang/Cloneable.html[`Cloneable`].
+The `Cloneable` has no method for implementation but the `Object.clone()` throws `CloneNotSupportedException`
+if the class does not imlement the interface `Cloneable`. Otherwise the `Object.clone()` method
+returns a field-by-field copy of the object.
+
+Though the specification doesn't say it, in practice, a class implementing `Cloneable` is expected
+to provide a properly functioning public clone method. And in order to achieve this, the class
+and all of its superclasses must obey a link:https://docs.oracle.com/javase/10/docs/api/java/lang/Object.html#clone()[complex protocol].
+
+The `Object.clone()` returns a shallow copy of the object. By default it's not thread-safe.
+The shallow copy means if e.g. the object uses `Array` it has to clone the elements separately.
+
+[source,java]
+----
+@Override public Stack clone() {
+  try {
+    Stack result = (Stack) super.clone();
+    // elements are of the type Object[]
+    result.elements = elements.clone();
+    return result;
+  } catch (CloneNotSupportedException e) {
+    throw new AssertionError();
+  }
+}
+----
+
+NOTE: public clone methods should omit the throws clause, as methods that don’t throw
+      checked exceptions are easier to use
+
+The Cloneable architecture is incompatible with normal use of final fields referring to mutable objects.
+If - e.g. from the prior example the `elements` would be final the deep copy would not be possible.
+In some cases then the `final` has to be erased for definition for `clone` to work.
+
+The clone method functions as a constructor; you must ensure that it does no harm
+to the original object and that it properly establishes invariants on the clone.
+
+Consider, instead of use `clone` which has to be thought through if it's used correctly
+and still it could cause troubles if the subclass/superclass do not implement it right,
+`copy constructor` link:./effective-java-02.adoc[(Item 1)] or `copy factory`
+
+[source,java]
+----
+// Copy constructor
+public Yum(Yum yum) { ... };
+// Copy factory
+public static Yum newInstance(Yum yum) { ... };
+----
+
+* they don’t conflict with the proper use of final fields
+* they don’t throw unnecessary checked exceptions
+* they don’t require casts
+* a copy constructor or factory can take an argument whose type is an interface implemented by the class
+  (e.g. all collection implementations provide a constructor whose argument is of type `Collection` or `Map`)
+
+NOTE: As a rule, copy functionality is best provided by constructors or factories.
+      A notable exception to this rule is arrays, which are best copied with the clone method.
+
+=== Item 14: Why to consider to implement `Comparable`
+
+`Comparable` is an interface that makes _natural sorting_ easily possibly.
+When the class implements the `Comparable` interface the sorting algorithms
+use it when the class is placed under a collection, like `Arrays.sort(a)`.
+
+[source,java]
+----
+public interface Comparable<T> {
+   int compareTo(T t);
+}
+----
+
+Compares this object with the specified object for order. Returns a negative integer, zero, or a positive integer
+as this object is less than, equal to, or greater than the specified object.
+Throws `ClassCastException` if the specified object's type prevents it from being compared to this object.
+
+A class whose `compareTo` method imposes an order that is inconsistent with `equals` will still work,
+but sorted collections containing elements of the class may not obey the general contract
+of the appropriate collection interfaces (`Collection`, `Set`, or `Map`). This is because the general
+contracts for these interfaces are defined in terms of the `equals` method, but sorted collections
+use the equality test imposed by `compareTo` in place of equals.
+It is not a catastrophe if this happens, but it’s something to be aware of.
+
+From Java 8 there could be used `Comparator` to construction to easier way of declaration (it has slightly worse performance)
+
+[source,java]
+----
+private static final Comparator<PhoneNumber> COMPARATOR =
+  comparingInt((PhoneNumber pn) -> pn.areaCode)
+    .thenComparingInt(pn -> pn.prefix)
+    .thenComparingInt(pn -> pn.lineNum);
+
+public int compareTo(PhoneNumber pn) {
+  return COMPARATOR.compare(this, pn);
+}
+----
+
+NOTE: occasionally you may see `compareTo` or `compare` methods that rely on the fact
+      the difference between two values is negative if the first value is less than the second
+      (e.g. `return o1.hashCode() - o2.hashCode()`).
+      Do not use this technique as it's fraguth with danger from integer overflow and
+      IEEE754 floating point arithmetic artifacts.

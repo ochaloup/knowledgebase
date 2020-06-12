@@ -1,0 +1,193 @@
+= Java Concurrency in Practice (chapter 15)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Java-Concurrency-Practice-Brian-Goetz/dp/0321349601
+
+icon:tags[] java, concurrency
+
+== Chapter 15: Atomic Variables and Non-blocking Synchronization
+
+Problem:   The best and the bad practices in Java concurrency and parallel programming.
+           What is the reason of performance boost of the atomic variables and non-blocking synchronization
+           with comparison to the (intrinstic) locking.
+
+=== Why locks are costly?
+
+On multiple threads requesting a lock the JVM may need the help of the operating system.
+The thread is suspended and resumed later. On resumed it may way for other threads to finish
+their scheduling quanta. Plus context switch happens on the thread suspension.
+
+=== How the non-blocking synchronization works?
+
+The basics is to use the HW operations which supports the non-blocking algorithms.
+From Java 5.0 the Java added the low level support to provide the HW operations as `compareAndSet`
+or `compareAndSwap` (`CAS`) to the Java util libraries.
+
+.Simulated CAS operations
+[source,java]
+----
+public synchronized int compareAndSwap(int expectedValue, int newValue) {
+  int oldValue = value;
+  if (oldValue == expectedValue)
+    value = newValue;
+  return oldValue;
+}
+
+public synchronized boolean compareAndSet(int expectedValue, int newValue) { ... }
+----
+
+The `compareAndSwap` tries to set the variable to the new value and passes the expected
+value to be currently set at the registry position.
+The processor instruction checks if the old value is currently set, if it's set
+then it replace it for the new value and returns the new value. Otherwise it returns
+the current value in the registry (different from the old/expected value).
+
+The algorithm is then based on these operations. It tries to utilize all the time
+it gets by scheduler and diminish the context switches.
+It runs in an "infinite" cycle trying to set the new value to the place.
+
+.An example of the counter
+[source,java]
+----
+public class CasCounter {
+  private SimulatedCAS value;
+
+  public int getValue() { return value.get(); }
+
+  public int increment() {
+    int v;
+    do {
+      v = value.get();
+    } while (v != value.compareAndSwap(v, v + 1));
+    return v + 1;
+  }
+}
+----
+
+=== What are the atomic variable classes?
+
+The atomic variable classes are those which uses built on top of algorithms
+using the non-blocking synchronization "paradigm" (in cycle waiting with `CAS`).
+
+Up to that the atomic variable classes provides the same visibility guarantees
+as the `sychronized` blocks or the `volatile`. When the change is done (`CAS` succeed)
+the result of the operation is immediately visible to all threads.
+
+The most commonly used atomic variables are the scalars:
+`AtomicInteger`, `AtomicLong`, `AtomicBoolean`, and `AtomicReference`.
+
+=== How to structure more complicated data structures with the non-blocking operations?
+
+The base idea is to find a way how to limit the scope of atomic changes to
+a single(*!*) `CAS` variable maintaining data consistency.
+
+.Example of the `Stack`
+[source,java]
+----
+public class ConcurrentStack <E> {
+  AtomicReference<Node<E>> top = new AtomicReference<Node<E>>();
+
+  public void push(E item) {
+    Node<E> newHead = new Node<E>(item);
+    Node<E> oldHead;
+    do {
+      oldHead = top.get();
+      newHead.next = oldHead;
+    } while (!top.compareAndSet(oldHead, newHead));
+  }
+
+  public E pop() {
+    Node<E> oldHead;
+    Node<E> newHead;
+    do {
+      oldHead = top.get();
+      if (oldHead == null)
+        return null;
+      newHead = oldHead.next;
+    } while (!top.compareAndSet(oldHead, newHead));
+    return oldHead.item;
+  }
+
+  private static class Node <E> {
+    public final E item;
+    public Node<E> next;
+
+    public Node(E item) {
+      this.item = item;
+    }
+  }
+}
+----
+
+The trick is that there is only one shared variable which is `CAS`-ed and when
+the swap operation does not succeed then it's tried again.
+
+.Example of the `ConcurrentLinkedQueue`
+[source,java,options="nowrap"]
+----
+public class LinkedQueue <E> {
+  private static class Node <E> {
+    final E item;
+    final AtomicReference<Node<E>> next;
+
+    public Node(E item, Node<E> next) {
+      this.item = item;
+      this.next = new AtomicReference<Node<E>>(next);
+    }
+
+    private final Node<E> dummy = new Node<E>(null, null);
+    private final AtomicReference<Node<E>> head = new AtomicReference<Node<E>>(dummy);
+    private final AtomicReference<Node<E>> tail = new AtomicReference<Node<E>>(dummy);
+
+    public boolean put(E item) {
+      Node<E> newNode = new Node<E>(item, null);
+      while (true) {
+        Node<E> curTail = tail.get();
+        Node<E> tailNext = curTail.next.get();
+        if (curTail == tail.get()) {
+          if (tailNext != null) {
+            // Queue in intermediate state, advance tail
+            tail.compareAndSet(curTail, tailNext);
+          } else {
+            // In quiescent state, try inserting new node
+            if (curTail.next.compareAndSet(null, newNode)) {
+              // Insertion succeeded, try advancing tail
+              tail.compareAndSet(curTail, newNode);
+              return true;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+----
+
+The trick is more complicated as for linked list there are two places where
+the atomic change has to be processed atomically.
+This is not possible for simple `CAS` (some processors already provides some
+enhanced instructions like `DCAS` which may atomically switch two memory places).
+The idea is that the linked queue may be in an intermediate state. This happens
+when `node.next` of the last node is changed. Then the `tail` points to a wrong
+node (aka. to a node which is not last in the sequence). If other thread comes
+to the structure which is in the intermediate state then it helps the first thread to finish.
+It will move the `tail` pointer to the `node.next`.
+If the linked queue is in quiescent state then we know that `tail.next` is `null`.
+In intermediate state the `tail.next` is not null.
+That way the incoming thread may help the other thread to move the linked queue
+to quiescent state and then it can follow with its own operations.
+
+
+=== What if `CAS` found element value is the expected one but meanwhile the value was switched to new value and then back to orignal value?
+
+This is known as _ABA problem_ which may arise from the use
+of the compare-and-swap when nodes can be reused.
+
+If the algorithm needs to track such changes (not all require it)
+it's used versioning. Instead of one value to be compared there is a pair
+where first record is a integer version and the second is the value.
+When the value is changed the version is increased.
+
+NOTE: some processors supports this type of the tuple and provides instruction
+      `CAS2` or `CASX` which operates on a 'pointer-integer' pair.

@@ -9,7 +9,7 @@ icon:tags[] java, concurrency
 == Chapter 13: Explicit Locks
 
 Problem:   The best and the bad practices in Java concurrency and parallel programming.
-           What is the Java alternative to instrinstic locks_
+           What is the Java alternative to instrinstic locks?
 
 === What is the `Lock` and `ReentrantLock` interfaces?
 
@@ -49,7 +49,7 @@ try {
 ----
 
 The advantage is that the lock may be taken interruptedly.
-The `tryLock` throws the `InterruptedExcpetion` and it may be defined with timeout.
+The `tryLock` throws the `InterruptedException` and it may be defined with timeout.
 When intrinsic lock waits for a lock it's not interruptible.
 
 An advantage of intrinsic lock is that the threaddump refers them easily and
@@ -57,17 +57,17 @@ in better way than this explicit `Lock` object is referred.
 
 === What is a fairness lock?
 
-Nonfair `ReentrantLocks` do not go out of their way to promote barging
+Nonfair `ReentrantLock` do not go out of their way to promote barging
 they simply don't prevent a thread from barging if it shows up at the right time.
 With a fair lock, a newly requesting thread is queued if the lock is held by another thread
 or if threads are queued waiting for the lock;
 with a non-fair lock, the thread is queued only if the lock is currently held.
-(The polled tryLock always barges, even for fair locks.)
+(The polled `tryLock` always barges, even for fair locks.)
 
 The fair locks usually have worse performance than the non-fair friends.
 The fair needs to queue and makes more context switches.
 
-=== Is there a lock for read-intensive occurences?
+=== Is there a lock for read-intensive occurrences?
 
 Yes, it could be used the `ReadWriteLock` which makes mutual exclusion only for write
 operations. There could be as many as possible concurrent reading operations
