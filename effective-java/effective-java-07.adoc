@@ -1,0 +1,241 @@
+= Effective Java (chapter 7)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 7: Lamda and Streams
+
+Problem: How to make a function objects in Java?
+         The functional interfaces, lamdas and method references
+         were added to Java to help here. The stream API was added
+         to add support of these to libraries.
+         How to make best use of them?
+
+=== Item 42: why to prefer lamdas over anynymous classes?
+
+It's easier and more comprehensible to read them.
+
+[source,java]
+----
+// obsolete aynoymous class instance
+Collections.sort(words, new Comparator<String>() {
+  public int compare(String s1, String s2) {
+    return Integer.compare(s1.length(), s2.length());
+  }
+});
+
+// lamda expression as function object
+Collections.sort(words, (s1,s2) -> Integer.compare(s1.length(), s2.length()));
+----
+
+NOTE: `s1` uses type the Java language feature of type interference
+      where the type is deduced by compiler from context.
+      There are some corner cases where the type can't be deduced
+      (it's even defined in spec some such cases) the the way is to cast it manually
+      or in case use the anonymous class as "workaround".
+
+Prefere use of lamda but do not use lamda for more then 3 lines of code inside of the lamda.
+Otherwise the lamda is long and badly readable. For longer inner methods
+use the _anyonymous class_ (lamda lacks the documentation and the data of parameters)
+or a _method reference_ (item 43).
+
+Few limitations for lamda:
+
+* lamda lacks names and documentation (anonymous class could be better)
+* `this` keyword refers for enclosing instance for lamda.
+  In _anyonymous class_ the `this` referes to the anonymous class instance instead.
+* nor lamda expression neiter anonymous class can be reliably serialized.
+  If you need serialization of the expression use _private static nested class_ (link:./effective-java-04.adoc[(Item 24)]).
+
+
+=== Item 43: why to prefer _method references_ to lamdas?
+
+_Method references_ are usually shorter in code when used. When used with a good
+name they are better comprehensible for reader as well.
+
+[source,java]
+----
+// long hard to understand lamda
+map.merge(key, 1, (count, incr) -> count + incr);
+// NOTE: merge function - if mapping is already present in the map
+// the method applies the merge function to the item; if not present the default value (1) ins inserted
+
+// shorter and with better name method reference
+map.merge(key, 1, Integer::sum);
+----
+
+In some cases the lamda is shorter and more readable like
+
+[source,java]
+----
+// method reference in the same class
+service.execute(GoshThisClassNameIsHumogous::action);
+// vs. lamda
+service.execute(() -> action());
+
+// method reference for identity
+service.execute(Function::identity));
+// vs. lamda
+service.execute(x -> x);
+----
+
+There are several "types" of the method references.
+The static one and 4 that uses the function object somehow.
+
+.Types of method references
+|===
+|Method reference type | Example | Lamda Equivalent
+
+|Static
+|`Integer::parseInt`
+|`str -> Integer.parseInt(str)`
+
+|Bound
+|`Instant.now::isAfter()`
+|`Instant then = Instant.now; t-> then.isAfter(t);`
+
+|Unbound
+|`String::toLowerCase`
+|`str -> str.toLowerCase()`
+
+|Class Constructor
+|`TreeMap<K,V>::new`
+|`() -> new Treemap<K,V>`
+
+|Array Constructor
+|`int[]::new`
+|`len -> new int[len]`
+|===
+
+
+=== Item 44: Why to prefer standard functional interfaces to creating new ones?
+
+The Java 8 offers multiple functional interfaces which should be favored
+as they provides flexibility, better comprehensible when used usually
+and you don't repeat what was already done.
+
+.Basic types of the functional interfaces from `java.util.function`
+|===
+|Interface   |Function Signature   | Example
+
+|UnaryOperator<T>
+|T apply(T t)
+|String::toLowerCase
+
+|BinaryOperator<T>
+|T apply(T t1, T t2)
+|BigInteger::add
+
+|Predicate<T>
+|boolean test(T t)
+|Collection::isEmpty
+
+|Function<T,R>
+|R apply(T t)
+|Arrays:asList
+
+|Supplier<T>
+|T get()
+|Instant::now
+
+|Consumer<T>
+|void accept(T t)
+|System.out::println
+|===
+
+NOTE: There are different flavors of these basic types. But the alternatives
+      may be (easily) derived.
+
+NOTE: don't be tempted to use basic functional interfaces with boxed primitives
+      instead of primitive functional interfaces. It works but performance consequences
+      could be deadly.
+
+Use the definition of own functional interfaces when it will be commonly used
+and could benefit from a descriptive name, it has a strong contract associated with,
+it would benefit from custom default methods.
+E.g. good example is https://docs.oracle.com/javase/8/docs/api/java/util/Comparator.html[`Comparator`].
+It has the same signature as https://docs.oracle.com/javase/8/docs/api/java/util/function/ToIntBiFunction.html[`ToIntBiFunction`].
+But `Comparator` has its own very specific purpose, strong contract, descriptive name and a lot of default methods.
+It would be pretty bad idea to use `Comparator` just for providing a generic method of two parameters returning the int.
+`Comparator` is used when the purpose is to compare and the implementation consider the contract defined by the `Comparator`.
+
+=== Item 45: When to use streams?
+
+Stream API in Java 8 makes possible to do bulk operations over data, sequentially or in parallel.
+`Stream` is an abstraction which represents finite or infinite data elements.
+The `stream pipeline` represents multistage computation on these elements.
+Common sources for the stream includes collections, arrays, files, regular expressions pattern matchers,
+number generators, and others streams.
+
+The stream pipeline consists of a _source_ of the stream, followed with zero or more
+_intermediate operations_ and one(!) _terminal operation_.
+Stream pipeline is computed lazily and the computation runs only when needed
+(thus it's possible to work with infinite streams).
+When there is defined no terminal operation then the pipeline is a silent no-op.
+
+The API for the streams is _fluent_.
+
+By default the stream is sequential. Make the operation executed in parallel
+is as simple as invoking the `parallel` method on the stream.
+(But it is seldom appropriate to do so.)
+
+Stream should be use judiciously for being readable in the code.
+Usually the best is to combine iterative approach with the functional stream style one.
+
+[source,java]
+----
+// note: two words are anagrams if they consist of the same letters in a different order
+// e.g. staple and petals are anagrams, if we alphabetize them (change the order of characters to be ordered by alphabet)
+// both of them will be in form "aelpst"
+public class Anagrams {
+  // Overuse of streams
+  public static void main(String[] args) throws IOException {
+    File dictionary = new File(args[0]); // file where dictionary is loaded from
+    // printing only group of words bigger than the arguments
+    //   (ie. group of size 1 is all words to be printed)
+    int minimumGroupSize = Integer.parseInt(args[1]);
+
+    Map<String, Set<String>> groups = new HashMap<>();
+    try (Stream<String> words = Files.lines(dictionary)) {
+      words.collect(
+        groupingBy(word -> word.chars().sorted().collect(
+          StringBuilder::new,
+          (sb,c) -> sb.append((char) c),
+          StringBuilder::append).
+            toString()))
+        .values().stream()
+          .filter(group -> group.size() >= minGroupSize)
+          .map(group -> group.size() + ": " + group)
+          .forEach(System.out::println);
+    }
+  }
+}
+----
+
+Example of comparison of iterative approach of cartesian product and the stream-based one.
+The example shows computation of deck of cards where on the input is an `Enum` of _Ranks_ and _Suits_.
+
+[source,java]
+----
+// iterative
+List<Card> newDeck() {
+  List<Card> result = new ArrayList<>();
+  for(Suit suit: Suit.values()) {
+    for(Rank rank: Rank.values()) {
+      result.add(new Card(suit,rank));
+    }
+  }
+  return result;
+}
+
+// stream-based
+List<Card> newDeck() {
+  return Stream.of(Suit.values())
+    .flatMap(suit -> Stream.of(Rank.values())
+      .map(rank -> new Card(suit, rank)))
+    .collect(toList());
+}
+----

@@ -1,0 +1,73 @@
+
+= Birthday paradox/problem
+
+:icons: font
+
+icon:bookmark[] https://blog.acolyer.org/2019/11/25/mergeable-replicated-data-types-part-i/, http://kcsrk.info/papers/oopsla19-mrdt.pdf
+
+icon:tags[] distributed.systems, crdt
+
+== Main idea
+
+The birthday paradox is a statistics paradox which is depicted on an example of
+what is the chance that two people from a group having the birthday in the same day.
+It's paradox because it goes against our intuition - ie. in the group of 23 people
+there is 50% chance that two people was born at the same day of the year
+but in the group of 75 people there is chance 99.9%.
+
+== Details
+
+=== Why the birthday problem is a paradox?
+
+Because it's counter-intuitive. It's because brains have trouble with the exponents.
+We think linearly.
+From mathematics point of view there is no paradox.
+
+=== How to calculate the probability?
+
+2 random people has the chance of the match 1/365. Which means 364/365 chance of no match.
+
+[source]
+----
+# chance for no match of two random people
+1 - 1/366 = 364/365 = 0.997260
+----
+
+What if we do not do a comparison of only two people but multiple?
+If we have 23 people in the group we have to do 253 comparisions.
+
+[source]
+----
+# chance for no match of 254 people in group
+(364/365)^253 = 0.4995
+----
+
+The formula for calculation
+
+[source]
+----
+p(n) = 1-(364/365)^(C(n,2)) = 1 - (364/365)^(n(n-1)/2)
+
+# group of 23 people and the chance there is a match of two people in group having the birthday in the same day
+1 -(364/365)^(23*22/2) = 1-(364/365)^253 = 0.5005
+----
+
+The chance that two people has the birthday in the same day of the group of 23 people is 50.05%.
+
+Online calculator to check other numbers https://instacalc.com/50201
+
+=== Is there some mental shortcut on this?
+
+If there is a group of items then about `sqrt(n)` items gives 50% chance of match.
+
+=== Where we can meet it in computer technology?
+
+If we have the hash function then we are interested in chance of collision of hashes.
+Let's say the hash function ensures the uniform distribution.
+E.g. `md5` works with 128 bits and we would expect the chance of the collision is `2^128`
+as there is `2^128` possibilities how the hash could be calculated.
+But because of the birthday paradox the chance of the hash collision is to be `2^64`.
+
+It's because even though there are `2^128` (`1e38`) "unique positions"
+we only have `2^64` (`1e19`) to use up before a `50%` chance of collision.
+And 50% is really, really high.

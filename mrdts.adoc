@@ -2,9 +2,9 @@
 
 :icons: font
 
-icon:bookmark[] https://blog.acolyer.org/2019/11/25/mergeable-replicated-data-types-part-i/, http://kcsrk.info/papers/oopsla19-mrdt.pdf
+icon:bookmark[] https://betterexplained.com/articles/understanding-the-birthday-paradox/
 
-icon:tags[] distributed.systems, crdt
+icon:tags[] statistics, mathematics
 
 == Main idea
 

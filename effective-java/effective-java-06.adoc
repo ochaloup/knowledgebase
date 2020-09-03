@@ -1,0 +1,395 @@
+= Effective Java (chapter 6)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 6: Enums and Annotations
+
+Problem:   What are the best practices when writing the Java program?
+           How to use the special-purpose families of reference types:
+           a kind of class called an _enum type_
+           and a kind of interface called _annotation type_?
+
+=== Item 34: Why to use enums instead of `int` constants?
+
+The `int` constants are like this
+
+[source,java]
+----
+public static final int APPLE_FUJI = 0;
+public static final int APPLE_PIPPIN = 1;
+public static final int APPLE_GRANNY_SMITH = 2;
+public static final int ORANGE_NAVEL = 0;
+----
+
+It's not safe for type - it's easy to mix apple with oranges, hard to get name of the record,
+program using the int is brittle.
+Better to use enum types.
+
+[source,java]
+----
+public enum Apple {FUNI, PIPIN, GRANNY_SMITH}
+public enum Orange {NAVEL}
+----
+
+Enums provide compile type safety.
+They provide high-quality implementations of all the `Object` methods, they implement
+`Serializable` and `Comparable`.
+
+NOTE: `enum` types are effectively `final` as they have no accessible constructor.
+
+`Enum` may be more powerful as makes possible to associate data with enum constants.
+
+[source,java]
+----
+public enum Planet { MERCURY(3.302e+23, 2.439e6), VENUS (4.869e+24, 6.052e6);
+  // fields may be public but consider make it private with getter
+  public final double mass;  // In kilograms
+  public final double radius;  // In meters
+  public final double surfaceGravity; // In m / s^2
+  // Universal gravitational constant in m^3 / kg s^2
+  private static final double G = 6.67300E-11;
+  // Constructor
+  Planet(double mass, double radius) {
+    this.mass = mass; this.radius = radius;
+    surfaceGravity = G * mass / (radius * radius);
+  }
+}
+----
+
+Enum methods may use `switch` to define specific specific behaviour by type
+but it's better to use `abstract` method - such methods are known as _constant-specific method implementations_.
+
+[source,java]
+----
+// Enum type with constant-specific method implementations
+public enum Operation {
+  PLUS {
+    public double apply(double x, double y){return x + y;}
+  },
+  MINUS {
+    public double apply(double x, double y){return x - y;}
+  };
+
+  public abstract double apply(double x, double y);
+}
+----
+
+Enum types have an automatically generated `valueOf(String)` method that translates
+a constant's name into the constant itself. If you override the `toString` method
+in an `enum` type, consider writing a `fromString` method.
+
+[source,java]
+----
+// Implementing a fromString method on an enum type
+private static final Map<String, Operation> stringToEnum =
+  Stream.of(values()).collect(
+    toMap(Object::toString, e -> e)
+  );
+// Returns Operation for string, if any
+public static Optional<Operation> fromString(String symbol) {
+  return Optional.ofNullable(stringToEnum.get(symbol));
+}
+----
+
+So when should you use enums?
+Use enums any time you need a set of constants whose members are known at compile time.
+It is not necessary that the set of constants in an `enum` type stay fixed for all time.
+The `enum` feature was specifically designed to allow for binary compatible evolution of enum types.
+
+=== Item 35: Why not to use `ordinal()` enum method?
+
+[source,java]
+----
+// Abuse of ordinal to derive an associated value
+// DON'T DO THIS!
+public enum Ensemble {
+  SOLO, DUET, TRIO, QUARTET, QUINTET, SEXTET, SEPTET, OCTET, NONET, DECTET;
+  public int numberOfMusicians() { return ordinal() + 1; }
+}
+----
+
+What if I add a triple quartet? I'm forced to add a _dummy constant_.
+It's in general impractical and it's ugly.
+
+Use data instead
+
+[source,java]
+----
+public enum Ensemble {
+  SOLO(1), DUET(2),..., TRIPPLE_QUARTET(12);
+}
+----
+
+`ordinal()` has special usage in `EnumSet` and `EnumMap` but it's not recommended
+to be used by most programmers.
+
+
+=== Item 36: How to design set of enumeration?
+
+Traditionally the enumeration set was implemented by assigning a different power of 2.
+
+[source,java]
+----
+// Bit field enumeration constants - OBSOLETE!
+public class Text {
+  public static final int STYLE_BOLD = 1 << 0; // 1
+  public static final int STYLE_ITALIC = 1 << 1; // 2
+
+  public void applyStyles(int stylesToApply) { ... }
+}
+textInstance.applyStyles(STYLE_BOLD | STYLE_ITALIC);
+----
+
+The bit field representation is hard to interpret and use and not to do an error,
+it's compile time safe neither.
+
+Use `EnumSet`.
+
+[source,java]
+----
+public class Text {
+  public enum Style {BOLD, ITALIC};
+  public void applyStyles(Set<Style> stylesToApply) { ... }
+}
+textInstance.applyStyles(EnumSet.of(Text.Style.BOLD, Text.Style.ITALIC));
+----
+
+`EnumSet` is represented as a bit vector. If the underlying `enum` type has sixty-four or fewer elements
+(and most do) the entire `EnumSet` is represented with a single long , so its performance
+is comparable to that of _a bit field_.
+
+=== Item 37: How to use `EnumMap`?
+
+Sometimes it's needed to split values based on the enum element types.
+Example says differs the plant by life cycle.
+
+[source,java]
+----
+public class Plant {
+  public enum LifeCycle {ANNUAL, PERENNIAL, BIENNAL};
+}
+----
+
+`EnumMap` makes possible to take plants and put them to a bucket based on their
+lifecycle.
+
+[source,java]
+----
+Map<Plant.LifeCycle, Set<Plant>> plantsByLifeCycle = new EnumMap<>(Plant.LifeCycle.class);
+for (Plant.LifeCycle lc : Plant.LifeCycle.values())
+  plantsByLifeCycle.put(lc, new HashSet<>());
+for (Plant p : garden)
+  plantsByLifeCycle.get(p.lifeCycle).add(p);
+----
+
+How to hack Java streams which when used then `EnumMap` would not be used
+by default - which loses the performance on not using `EnumMap` in these cases?
+Use the `Collectors.groupingBy` second argument.
+
+[source,java]
+----
+// Using a stream and an EnumMap to associate data with an enu
+System.out.println(Arrays.stream(garden).collect(
+  groupingBy(p -> p.lifeCycle,
+    () -> new EnumMap<>(LifeCycle.class), toSet())
+  )
+);
+----
+
+=== Item 38: How to extend enums?
+
+One of most compelling places for extending enums are opcodes.
+But the `enum` is final and cannot be inherrited.
+We need to use `interface` for it.
+
+[source,java]
+----
+// Emulated extensible enum using an interface public interface Operation { double apply(double x, double y); }
+public enum BasicOperation implements Operation {
+  PLUS("+") {
+    public double apply(double x, double y) {
+      return x + y;
+    }
+  };
+  private final String symbol;
+  BasicOperation(String symbol) { this.symbol = symbol; }
+  @Override public String toString() { return symbol; }
+}
+// Emulated extension enum
+public enum ExtendedOperation implements Operation {
+  EXP("^") {
+    public double apply(double x, double y) {
+      return Math.pow(x, y);
+    }
+  };
+  private final String symbol;
+  BasicOperation(String symbol) { this.symbol = symbol; }
+  @Override public String toString() { return symbol; }
+}
+
+// code to work with it to test
+private static <T extends Enum<T> & Operation> void test( Class<T> opEnumType , double x, double y) {
+  for (Operation op : opEnumType.getEnumConstants())
+    System.out.printf("%f %s %f = %f%n", x, op, y, op.apply(x, y));
+}
+----
+
+A minor flaw is that the `Enum` cannot inherit functionality from other `Enum`.
+E.g. in the case of our `Operation` example, the logic to store and retrieve the symbol
+associated with an operation must be duplicated in `BasicOperation` and `ExtendedOperation`.
+If there were a larger amount of shared functionality, you could encapsulate it
+in a helper class or a static helper method to eliminate the code duplication.
+
+
+=== Item 39: Why to prefer annotations to naming patterns?
+
+In old Java days there were no annotations and the _naming patterns_ was used
+by tools or frameworks to process with some functionality.
+For example old JUnit 3 used naming pattern of methods prefixed with _test_
+to consider the method as a test method.
+
+Nowadays the Java uses the annotation to provide compile time assurance
+(e.g. not existent `@Tst` annotation will be rejected while test named `tstSomething`
+  will just not be executed but no warning is shown). In general the naming
+patterns are more fragile and are not recommended.
+
+How the processing of annotation works in java - briefly.
+
+We have a declaration of the annotation.
+
+[source,java]
+----
+// retention says if the annotation may be read and processed during runtime
+@Retention(RetentionPolicy.RUNTIME)
+// where the annotation is permitted to be placed (here only at method declaration)
+@Target(ElementType.METHOD)
+public @interface MyTest {
+  // a property that can be used in annotation and processed later
+  Class<? extends Throwable> ignoredException();
+}
+----
+
+use of the annotation is like
+
+[source,java]
+----
+@MyTest(ignoredException = ArithmeticException.class)
+pblic static void something() { ... }
+----
+
+Processing of the annotation is like
+
+[source,java]
+----
+Class<?> testClass = Class.forName(args[0]);
+for(Method m: testClass.getDeclaredMethods()) {
+  if(m.isAnnotationPresent(MyTest.class)) {
+    try {
+      m.invoke(null);
+    } catch (InvocationTargetException wrappedException) {
+      Throwable exception = wrappedException.getCause();
+      Class<? extends Throwable> ignoredException = m.getAnnotation(MyTest.class).ignoredException();
+      if(ignoredException.isInstance(exception)) {
+        // do nothing
+      } else {
+        throw wrappedException;
+      }
+    } catch (...) { ... }
+  }
+}
+----
+
+From Java 8 there is possibility to use `@Repeatable` meta-annotation
+to be capable to repeat annotations at one place. Let's there could be multiple
+ignored exceptions test defined for a method (just for a brief demonstration).
+
+[source,java]
+----
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+@Repeatable(ExceptionTestContainer.class)
+public @interface MyTest {
+  Class<? extends Throwable> ignoredException();
+}
+
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.METHOD)
+public @interface ExceptionTestContainer {
+  MyTest[] value();
+}
+
+@MyTest(ignoredException = ArithmeticException.class)
+@MyTest(ignoredException = IllegalArgumentException.class)
+pblic static void something2() { ... }
+----
+
+There is a little bit trouble on how to handle the use of the repeatable
+exceptions. It's not straight forward and has to be done like
+
+[source,java]
+----
+if(m.isAnnotationPresent(MyTest.class) || m.isAnnotationPresent(ExceptionTestContainer.class)) {
+  // ^^ both annotations have to be verified
+  try {
+    m.invoke(null);
+  } catch (InvocationTargetException wrappedException) {
+    Throwable exception = wrappedException.getCause();
+    Class<? extends Throwable> ignoredException = m.getAnnotation(MyTest.class).ignoredException();
+    MyTest[] myTests = m.getAnnotationByType(MyTest.class);
+    for(ExceptionTest testAnnotation: myTests) {
+      if(testAnnotation.ignoredException().isInstance(exception)) {
+        ...
+      }
+    }
+  } catch (...) { ... }
+}
+----
+
+=== Item 40: Why to use annotation `@Override`
+
+The `@Override` annotation is available from Java 5.
+It serves to mark a method  (annotation can be placed only at a method)
+as overriding a parent method.
+This makes possible for compiler if it's true. If not compilation error is shown.
+
+Example:
+
+[source,java]
+----
+@override
+public boolean equal(MyReallyTunedStuff o) {
+  ...
+}
+----
+
+this will throw an exception as the `Object` class declares the `equal` method
+with signature `public boolean equal(Object o)`.
+Here the method was overloaded but not overridden.
+
+The `@Override` may be used for method implementing interface's methods or
+abstract methods (not necessary for checking the compilation errors
+  as not implemented abstract method means error either way).
+
+== Item 41:  Why to use marker interfaces?
+
+If you want to mark some class has some property, you can annotate it with
+a special annotation. But you may use an _marker interface_ instead.
+For frameworks it's probably more logical to use annotations as there is an abstract
+of functionality behind.
+The marker interface may be more appropriate in some situations - e.g. the marker
+interface targets more precisely (the annotation may be used at whatever type,
+  the marker annotation may be used only on to a sole interface to which is applicable).
+As well marker interface is easier (automatic) to be checked during compilation.
+But if you need to define some property then ask yourself
+"Might I want to write one or more methods that accept only(!) objects that have
+this marking?"
+If so, you should use the marker interface.
+
+In a sense, this item is inverse of (link:./effective-java-04.adoc[(Item 22)]).
+To a first approximation, this item says - "iff you do want to define a type,
+ do use an interface" (while the the `item 22` says "if you don't want to define a type,
+ don't use interface")

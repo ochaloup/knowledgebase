@@ -104,3 +104,293 @@ which can be annotated, instead of annotate whole methods with consisting multip
 
 
 === Item 28: why to prefer lists over to arrays?
+
+Arrays are _covariant_ and _reified_, generics are _invariant_ and _erased_.
+They do not play well together. And the generics is the way which
+*offers better type safety during build time*.
+
+covariant:: it means that if `Sub` is a subtime of `Super` then array type `Sub[]`
+    is as subtype of the array `Super[]`
+
+invariant:: for any two distinct types `Type1` and `Type2` the `List<Type1>`
+    is neither subtype nor supertype of the `List<Type2>`
+
+[source,java]
+----
+// Fails at runtime!
+Object[] objectArray = new Long[1];
+objectArray[0] = "I don't fit int" // throws ArrayStoreException
+
+// -- vs. --
+// Won't compile - incompatible types
+List<Object> ol = new ArrayList<Long>();
+ol.add("I don't fit in");
+----
+
+reified:: arrays know and enforce their element type at runtime
+
+erasure:: enforce the type only(!) during compilation and the type is discarded
+   (erased) for runtime. The erasure is what allowed generic types to interoperate
+   freely with legacy code that didn't use generics.
+
+NOTE: Those are essentials differences between _arrays_ and _generics_. It's the reason
+      why none of these array creation expressions are legal:
+      `new List<E>[]`, `new List<String>[]`, `new E[]`. All will result in generic
+      array creation errors at compile time.
+
+
+=== Item 29: why to use generic types?
+
+Use generic types rather than array as it provides better type safety during compilation.
+
+[source,java]
+----
+public class Stack {
+  private Object [] elements;
+  private int size = 0;
+  private static final int DEFAULT_INITIAL_CAPACITY = 16;
+
+  public Stack() {
+    elements = new Object [DEFAULT_INITIAL_CAPACITY];
+  }
+  public void push( Object e) {
+    ensureCapacity();
+    elements[size++] = e;
+  }
+  ...
+}
+----
+
+Using generic types (aka. `E`) give a way to be type-safety during compilation
+but parametrize the type that the class may work with.
+
+[source,java]
+----
+public class Stack <E> {
+  private E [] elements;
+  private int size = 0;
+  private static final int DEFAULT_INITIAL_CAPACITY = 16;
+
+  public Stack() {
+    elements = new E [DEFAULT_INITIAL_CAPACITY];
+  }
+  public void push( E e) {
+    ensureCapacity();
+    elements[size++] = e;
+  }
+  ...
+}
+----
+
+This fails as `new E[]` is not permitted. On combination of `array` and _generics_
+we can't avoid some suppression of type checking. +
+This will work thought
+
+[source,java]
+----
+@SuppressWarnings("unchecked") public Stack() {
+  elements = (E[]) new Object[DEFAULT_INITIAL_CAPACITY];
+  ...
+}
+----
+
+[NOTE]
+====
+another solution for using generic type is to define the `elements` as
+`Object[]` instead of `E[]`. Then we would need to retype a potentially implemented
+`pop` function.
+
+[source,java]
+----
+public E pop() {
+  if (size == 0) throw new EmptyStackException();
+  // return requires elements to be of type E
+  @SuppressWarnings("unchecked")
+  E result = (E) elements[--size];
+  elements[size] = null; // Eliminate obsolete ref
+  return result;
+}
+----
+====
+
+There are generic types which restrict the permissible values of their type parameters.
+E.g `DelayedQueue`: `class DelayedQueue<E extends Delayed> implements BlockingQueue<E>`.
+The `<E extends Delayed>` requires that the actual parameter `E` is subtype of `Delayed`.
+
+=== Item 30: Why to favor writing generic methods?
+
+Writing generic methods makes the method more flexible for usage.
+
+NOTE: The type parameter list, which declares the type parameters,
+      goes between a method's modifiers and its return type.
+
+.Example of generic method
+[source,java]
+----
+public static <E> Set<E> union(Set<E> s1, Set<E> s2) {
+  Set<E> result = new HashSet<>(s1);
+  result.addAll(s2);
+  return result;
+}
+
+// Simple program to exercise generic method
+public static void main(String[] args) {
+  Set<String> guys = Set.of("Tom", "Dick", "Harry");
+  Set<String> stooges = Set.of("Larry", "Moe", "Curly");
+  Set<String> aflCio = union(guys, stooges);
+  System.out.println(aflCio);
+}
+----
+
+It is permissible, though relatively rare, for a type parameter to be bounded
+by some expression involving that type parameter itself.
+E.g. `max` function requires that every element in the collection be comparable
+to every other element in it, in other words, that the elements of the list be mutually comparable.
+
+.Recursive type bound to express mutual comparability
+[source,java]
+----
+static <E extends Comparable<E>> E max(Collection<E> c) {
+  if (c.isEmpty()) throw new IllegalArgumentException("Empty collection");
+  E result = null;
+  for (E e : c)
+    if (result == null || e.compareTo(result) > 0)
+      result = Objects.requireNonNull(e);
+  return result;
+}
+----
+
+=== Item 31: Why to use bounded wildcards?
+
+It increases API flexibility.
+Parametrized types are invariant (see _Item 28_) and thus flexibility for parameter
+handling can be achieved with use of the bounded wildcards - ie. because
+the `List<Type1>` can be never supertype of `List<Type2>` we need to use
+`List<? extends Type1>`.
+
+What if I want to push an `Integer` to a stack of `Number` s?
+
+[source,java]
+----
+Stack<Number> numberStack = new Stack<>();
+Iterable<Integer> integers = ... ;
+numberStack.pushAll(integers);
+----
+
+For this to work and not getting errors of type
+`StackTest.java:7: error: incompatible types: Iterable<Integer>`.
+
+The `pushAll` can be declared as `void pushAll(Iterable<E> src)` but
+
+[source,java]
+----
+// Wildcard type for a parameter that serves as an E producer
+void pushAll(Iterable<? extends E> src) {
+  for (E e : src)
+    push(e);
+}
+----
+
+Important to know that the *producer* (something adding an item to the collection)
+is defined with `extends`. The *consumer* needs `super`.
+
+[source,java]
+----
+// Wildcard type for parameter that serves as an E consumer
+void popAll(Collection<? super E> dst) {
+  while (!isEmpty())
+    dst.add(pop());
+}
+----
+
+NOTE: *PECS* stands for producer &ndash; extends, consumer &ndash; super.
+
+Do not use bounded wildcard types as return types. Rather than providing additional
+flexibility for your users, it would force them to use wildcard types in client code.
+Go rather with like
+
+[source,java]
+----
+static <E> Set<E> union(Set<? extends E> s1, Set<? extends E> s2) ...
+
+// NOTE: Explicit type parameter - required prior to Java 8
+Set<Number> numbers = Union.<Number> union(integers, doubles);
+----
+
+API flexibility for the discussed `max` function is complex but worthwhile.
+
+[source,java]
+----
+static <T extends Comparable<? super T>> T max( List<? extends T> list) ...
+----
+
+=== Item 32: Why to be cautious of generics and varargs?
+
+Because they do not play well together. Despite they were added both in Java 5
+they do not work well when used together.
+
+[source,java]
+----
+// Mixing generics and varargs can violate type safety!
+void dangerous(List<String>... stringLists) {
+  List<Integer> intList = List.of(42);
+  Object[] objects = stringLists;
+  objects[0] = intList; // Heap pollution
+  String s = stringLists[0].get(0); // ClassCastException
+}
+----
+
+It is unsafe to store a value in a generic varargs array parameter.
+But when used with care with following recommendations then using generics
+with varags is beneficial.
+
+1. does not store anything in the varargs parameter array
+2. does not make the array (or a clone) visible to untrusted code.
+   If either of these prohibitions is violated, fix it.
+
+In other words do not touch on generics varargs but only read them!
+
+E.g. Java libraries uses it often
+`Arrays.asList(T... a)`, `Collections.addAll(Collection<? super T> c, T... elements)`,
+`EnumSet.of(E first, E... rest)`.
+
+Still when they are used there is Java compilation warning generated
+when such method is used in the client code.
+Because of the client code not being force to use `@SuppressWarnings("unchecked")`
+then such method could be annotated with `@SaveVarargs` (from Java 7)
+and usage of such method stops to generate compile time warnings.
+
+=== Item 33: What is a typesafe heterogenous container?
+
+A way how to define in java container of different type.
+E.g. `Set<E>` is defined only for one type. But what if we want to store multiple types
+- aka. a `String`, an `Integer`, another object.
+There is a trick of using a `Map` where the `Class` is key and value is the type
+of that class.
+
+[source,java]
+----
+// Typesafe heterogeneous container pattern
+public class Favorites {
+  private Map<Class<?>, Object> favorites = new HashMap<>();
+
+  public <T> void putFavorite(Class<T> type, T instance) {
+    favorites.put(Objects.requireNonNull(type),instance);
+  }
+  public <T> T getFavorite(Class<T> type) {
+    return type.cast(favorites.get(type)) ;
+  }
+}
+----
+
+If you need to safely cast to a bounded type token use `asSubclass` method.
+
+[source,java]
+----
+static Annotation getAnnotation(AnnotatedElement element, String annotationTypeName) {
+  Class<?> annotationType annotationType = Class.forName(annotationTypeName);
+  return element.getAnnotation(annotationType.asSubclass(Annotation.class));
+}
+----
+
+adafdsf return
