@@ -2502,7 +2502,7 @@ saga of three transactions `T1`, `T2`, `T3`, each has compensating action `C1`, 
 T1 -> safe-point created -> T2 -> T3 crashes -> atomic rollback is done for T3 -> C2 -> reaches safe-point -> T2 -> T3
 ```
 
-=== Somwhere from the slides I wrote
+=== Somewhere from the slides I wrote
 
 Concept of long lived transaction.
 
@@ -3538,7 +3538,7 @@ icon:bookmark[] +
 
 On Tue, May 9, 2017 at 8:16 AM, Burr Sutter <bsutter@redhat.com> wrote on 'thecore':
 
-If I shoul eveluate some new tool/product/project (in this case it was http://www.apicur.io) check if you
+If I should evaluate some new tool/product/project (in this case it was http://www.apicur.io) check if you
 have a 5 minute demo video?
 
 Like many evaluators of tech:

@@ -239,3 +239,146 @@ List<Card> newDeck() {
     .collect(toList());
 }
 ----
+
+=== Item 46: How to write a function in stream right?
+
+The preference should be to use side-effect-free functions.
+It's based of the fact how functional programming paradigm should be used.
+When streams are used then its paradigm should be used.
+There are reasons to use the iterative paradigm and sometimes is better
+to use the stream one. But it's often matter of preference.
+
+Let's see and example of stream API which is not used in the paradigm way.
+It's iterative code masquerading as stream code.
+All work is done in the terminal `forEach` operation, lamda mutates the external state.
+
+[source,java]
+----
+Map<String,Long> freq = new HashMap<>();
+try(Stream<String> words = new Scanner(file).tokens()) {
+  words.forEach(word -> {
+    freq.merge(word.toLowerCase(), 1L, Long::sum);
+  })
+}
+----
+
+The same task in stream paradigm way.
+Here the `Collectors API` is used which collects the stream items into a collection.
+
+[source,java]
+----
+Map<String,Long> freq = new HashMap<>();
+try(Stream<String> words = new Scanner(file).tokens()) {
+  freq = words.collect(groupingBy(String::toLowerCase, counting()));
+}
+----
+
+NOTE: `forEach` should be used only to report the result of a stream computation,
+      never to perform the computation
+
+The `Collectors API` contains several types of collectors.
+
+NOTE: it's wise to statically import all members of `Collectors`
+      for making the stream more readable
+
+* gathering stream into a true `Collection`: `toList()`, `toSet()`, `toCollection(collectionFactory)`
+* simple collecting stream into a `Map`: `toMap(keyMapper, valueMapper)`
+* complicated forms of `Map` collectors: `toMap(keyMapper, valueMapper, mergerFunction)` and `groupingBy` which defines
+  a strategy to handle collision with a _merger function_ (as a third argument).
+  The merge function is `BinaryOperator<V>` where `V` is `value` type of `Map`.
+* specific `Map` implementation collector: `toMap(keyMapper, valueMapper, mergerFunction, mapFactory)`,
+  e.g. map factor for creation of `EnumMap` or `TreeMap`
+* collector that groups data into categories while returning a map `groupingBy(categoryFunction)`,
+  by default returns _a `HashMap` of `List`, as an alternative there is a `groupingByConcurrent` where
+  `ConcurrentHashMap` is used.
+* to join a stream of `CharSequence` which is `joining` and is useful when working with `String`
+
+=== Item 47: What return type to use when `Stream` was introduced in Java 8?
+
+As each of us has a different customs for working with data then somebody wants to use
+`Stream` and the other one `Iterable`. The trouble is that there is no easy way
+to convert the `Stream` and `Iterable` and vice versa.
+
+As utility methods we can create this
+
+[source,java]
+----
+// Adapter from Stream<E> to Iterable<E>
+// the `Stream` contains the iterator method but it has to be typed
+//   (here the typying is implicit as it's known what type the method returns)
+public static <E> Iterable<E> iterableOf(Stream<E> stream) {
+  return stream::iterator;
+}
+
+// Adapter from Iterable<E> to Stream<E>
+public static <E> Stream<E> streamOf(Iterable<E> iter) {
+  return StreamSupport.stream(iterable.spliterator(), false);
+}
+----
+
+But the best is probably to return `Collection`. It can be easily converted to `Stream`
+with available method `Stream.of` (and from arrays to iterator with `Arrays.asList`).
+
+NOTE: do not store a large sequence in memory just to return it as a collection
+
+If there is need for some "infinite" number of elements then you can consider
+to implement own custom `Collection`. If it's not feasible then return `Stream`
+or `Iterable` which fits more natural.
+
+NOTE: in future Java release maybe the `Stream` interface  will be adjusted
+      to extend `Iterable`, if that happens then `Stream` could be returned
+      preferably as it will allow both - stream processing and iteration.
+
+
+=== Item 48: why to be cautious about parallel streams?
+
+Parallelizing the stream processing is easy as to add `parallel()` call
+to the processing pipeline. Java executes such in `fork-join` pool
+and all processes shares the pool. Slow processing of one task which takes
+a lot of resources may slow down other pipeplines as well.
+
+On top of this the wrongly used `parallel()` could make issues. There could be
+a live lock or deadlock when used without caring.
+E.g. using `limit()` means that only number of items are taken to the output.
+`Parallel()` then runs multiple actions and expecting to just thrown those
+which will not fit the limit. But if we use some long calculation where the
+next iteration takes much more than all previous ones (e.g. calculation of
+  the next prime number takes more time than calculation of all previous ones)
+then `parallel` means calculation of next 2 more which would be "limited"
+but until calculated the pipeline has to wait. Here such pipeline with `parallel()`
+will be slower than without it.
+
+NOTE: parallelizing a pipeline is unlikely to increase its performance if the source
+      is from `Stream.iterate`, or the intermediate operation `limit` is used
+
+A good clue: performance gains from parallelism are best on streams over `ArrayList`,
+`HashMap`, `HashSet`, and `ConcurentHashMap` instances; arrays; `int` ranges;
+and `long` ranges.
+They all can be cheaply split into sub-ranges of any desired sizes
+(the stream library use for this task the `spliterator` which is returned
+by `spliterator` method on `Stream` or `Iterable`).
+For good paralellizing is necessary the datastructure to provide good-to-excellent _locality of reference_
+when the subrange processed sequentially - which means the sequential references are stored
+together in memory. This means the loading the memory to CPU cache is here for help.
+Otherwise the threads spend much of their idle time on waiting for transfering data from memory
+to processor's cache.
+
+Important note: parellizing the stream is performance(!) optimalization
+and it should be considered so.
+
+A good place to use parallelism on the stream
+
+[source,java]
+----
+// number of primes less than or equal to 'n'
+static long pi(long n) {
+  return LongStream.rangeClosed(2,n)
+    .parallel()
+    .mapToObj(BigInteger::valueOf)
+    .filter(i -> i.isProbablePrime(50))
+    .count();
+}
+----
+
+TIP: if you are going to parallelize a stream of random numbers,
+     start with `SplittableRandom` rather than a `ThreadLocalRandom`

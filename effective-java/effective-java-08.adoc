@@ -1,0 +1,251 @@
+= Effective Java (chapter 8)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 8: Methods
+
+Problem: What are the aspecst to design a method - how to treat parameters
+         and return values, how to design method signature, how to document a method?
+
+=== Item 49: Why to check input parameters for validity?
+
+Invalid parameter on method input may cause the method fails, returns a corrupted
+data or even make misbehaving the other part of code.
+
+Typically the method checks arguments and throws `IllegalArgumentException`,
+`IndexOutOfBoundsException`, or `NullPointerException`.
+The exceptions should be documented with `javadoc` at method declaration
+with `@throws` tag.
+
+The `Objects.requireNonNull` method, added in Java 7, is flexible and convenient
+to be used.
+In Java 9 a range-checking facilities were added to `java.util.Objects`.
+Those are `checkFromIndexSize`, `checkFromToIndex` and `checkIndex`.
+
+NOTE: not all exception needs to be documented at the method level.
+      For example `BigInteger#mod(BigInteger)` documents the `ArithmeticException`
+      but there could be thrown the `NullPointerException` as well.
+      This fact is documented on the `class` level and could not be repeated
+      at all method declaration.
+
+In case of unexported methods, you as the package author, should control the circumstances
+of passing arguments. You can and should ensure the validity on method call.
+Therefore, nonpublic methods can check their parameters using `assertions`.
+The `assertion` claims the fact _will be true_, regardless of how the enclosing
+package is used by its clients.
+
+Assertion is not evaluated until the java program is started with `-ea` (`-enableassertions`)
+and if fails it throws `AssertionError`.
+
+[source,java]
+----
+private static void sort(long a[], int offset, int length) {
+  assert a != null;
+  assert offset >= 0 && offset <= a.length;
+  assert length >= 0 && length <= a.length - offset;
+}
+----
+
+NOTE: a lot of times is not needed to do validity checks when done in code
+      in same logic way. E.g. if sort is used `Collection.sort(List)`
+      the all objects in the list must be mutually comparable. As the `sort`
+      does the check we do not need to do it explicitly before the method usage.
+
+Be sure to check the validity of parameters especially on constructors
+to not create corrupted object.
+
+
+=== Item 50: Why to use defensive copies?
+
+Any program needs to be created defensively, with assumption that clients
+of your class will do their best to destroy its invariants.
+
+Example of invariants can be destroyed by client.
+
+[source,java]
+----
+public final class Period {
+  private final Date start;
+  private final Date end;
+
+  /**
+    java doc with definition of @throws
+  */
+  public Period(Date start, Date end) {
+    if(start.compare(end) > 0)
+      throw new IllegalArgumentException(start + " after " + end);
+    this.start = start;
+    this.end = end;
+  }
+
+  public Date start() {
+    return start;
+  }
+  public Date end() {
+    return end;
+  }
+}
+----
+
+The invariant is clear here - the _start time_ has to be before _end time_.
+
+NOTE: as of Java 8, the obvious way to fix the mutability of `Date` is to use
+      `Instant` (or `Local`-`DateTime` or `ZonedDateTime`)
+
+The client may do
+
+[source,java]
+----
+Date start = new Date();
+Date end = new Date();
+Period p = new Period(start, end);
+// modifies the internal of the Period p and the
+end.setYear(78);
+// when constructor would be defended against the change, this uses access
+// through getter to the object used internally by Period class
+p.end().setYear(78);
+----
+
+To defend the instance against such changes which corrupt the invariants
+the class should use the defensive copies. Note that the defensive copy is made
+*before* checking the validity of parameters and the validity check is performed
+on the copies!
+
+[source,java]
+----
+// repaired constructor
+public Period(Date start, Date end) {
+  this.start = new Date(start.getTime());
+  this.end = new Date(end.getTime());
+
+  if(this.start.compare(this.end) > 0)
+    throw new IllegalArgumentException(this.start + " after " + this.end);
+}
+
+// repaired the getters
+public Date start() {
+  return new Date(start.getTime());
+}
+public Date end() {
+  return new Date(end.getTime());
+}
+----
+
+You should, where possible, use immutable objects as components of your objects
+so that you don't have to worry about defensive copying (see link:./effective-java-04.adoc[(Item 17)]).
+
+There may be performance penalty associated with the defensive copying and
+it isn't always justified. If a class trusts the caller not to modify internal component,
+then it may be appropriate to dispense with defensive copying.
+
+
+=== Item 51: Why to design method signatures carefully?
+
+This is a set of guidance principles to think when creating the method.
+This makes reading the method and understanding the code reasonable.
+
+* _Choose method names carefully_ - obey naming conventions and consider to be understandable and consistent
+* _Don't go overboard in providing convenience methods_ - too many methods make a class difficult to learn, use, document, test and maintain.
+  Consider providing "shorthand" only if it will be used often.
+* _Avoid long parameter lists_ - aim for four parameters or fewer. One way is having helper class (`static member class`)
+  which consists the parameters (have setters etc). Or adapt the `Builder` pattern.
+  Or break the method up into multiple methods - e.g. `List.subList(from, to).indexOf(Object)`.
+* _For parameter types, favor interfaces over classes_ - if there is an appropriate
+  interface to define a parameter, use it in favor of a class that implements it.
+* _Prefer two-element enum types to `boolean` parameters_ - using `enum TemperatureScale {FARENHEIT, CELSIUS}`
+  is more appropriate than use `boolean` consider `Thermometer.newInstance(TemperatureScale.CELSIUS)` vs. `Thermometer.newInstance(true)`.
+
+=== Item 52: Why to take care of overloading?
+
+Overloading is made in compile time. Overriding is dynamic and is made during run-time.
+
+Example of issue with overloading
+
+[source,java]
+----
+public class ColletionClassifier {
+  public static String classify(Set<?> set) {
+    return "Set";
+  }
+  public static String classify(List<?> list) {
+    return "List";
+  }
+  public static String classify(Collection<?> collection) {
+    return "Unknown Collection";
+  }
+  public static void main(String[] args) {
+    Collection<?>[] collections = {
+      new HashSet<String>(),
+      new ArrayList<BigInteger>(),
+      new HashMap<String,String>().values()
+    };
+
+    for (Collection<?>  c: collections) {
+      System.out.prinln(classify(c));
+    }
+  }
+}
+----
+
+The example prints "Unknown Collection" three times!
+The classify method is overloaded, the decision is done during compile time,
+the compile-time type of the parameter is the same `Collection<?>`
+and thus the only applicable overloading is the `classify(Collection<?> collection)`.
+
+This is a difference to overriding.
+If an instance method is overridden in a subclass and this method is invoked on an instance of the subclass,
+the subclasss' overriding method executes, regardless of the compile-time type of the subclass instance.
+
+To avoid troubles as a safe policy do not overload methods with the same number of parameters,
+you can always name them differently instead.
+If really needed to do "overloading" in runtime you have to do it manually like
+
+[source,java]
+----
+public static String classify(Collection<?> collection) {
+  return collection instanceof Set ? "Set" :
+         collection instanceof List ? "List" : "Unknown Collection";
+}
+----
+
+Especially be aware of autoboxing. E.g. even the java API has some "skeletons in the closet"
+in this regard.
+
+[source,java]
+----
+Set<Integer> set = new TreeSet<>();
+List<Integer> list = new ArrayList<>();
+int i = ...;
+set.remove(i);
+list.remove(i);
+----
+
+The call `set.remove(i)` selects the overloading `remove(E)` where `E` is the element
+of the `set` which is an `Integer`, and autoboxes `i` from `int` to `Integer`.
+The call `list.remove(i)` selects the overloading `remove(int i)` and removes
+an element on the position (on index) not the element itself.
+
+Further, the Java 8 lamdas may increase the confusion in overloading.
+
+[source,java]
+----
+// this compiles
+new Thread(System.out::println).start();
+
+// this does not compile
+ExecutorService exec = Executors.newCachedThreadPool();
+exec.submit(System.out::println);
+----
+
+The argument is the same - the constructor and the method have an overloading
+that takes a `Runnable`. But `submit` has an overloading that takes a `Callable<T>`
+while `Thread` constructor does not. And here are issues of how internals of overloading algorithm
+works (_JLS, 15.13.1_) - it's the combination of the overloading of the referenced method (`prinlnt`)
+and the invoked method (`submit`) that prevents the overload resolution algorithm from behaving
+as one would expect.
+
+NOTE: the Java compiler may warn you about problematic overloads by passing `-Xlint:overloads`.
