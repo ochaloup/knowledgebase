@@ -244,8 +244,128 @@ exec.submit(System.out::println);
 The argument is the same - the constructor and the method have an overloading
 that takes a `Runnable`. But `submit` has an overloading that takes a `Callable<T>`
 while `Thread` constructor does not. And here are issues of how internals of overloading algorithm
-works (_JLS, 15.13.1_) - it's the combination of the overloading of the referenced method (`prinlnt`)
+works (_JLS, 15.13.1_) - it's the combination of the overloading of the referenced method (`println`)
 and the invoked method (`submit`) that prevents the overload resolution algorithm from behaving
 as one would expect.
 
 NOTE: the Java compiler may warn you about problematic overloads by passing `-Xlint:overloads`.
+
+When _varargs_ is used then use *one or more arguments* of one type
+than *zero or more arguments*.
+
+[source,java]
+----
+// don't use this
+static int min(int... args) {
+  ...
+}
+// use rather this
+static int min(int firstArg, int... otherArgs) {
+  ...
+}
+----
+
+Be aware that using the _varargs_ argument means that a new instance of array
+is created on the method call! In performance-critical situation then the array
+allocation and initialization could be costly. You can use the overloading
+
+[source,java]
+----
+static int min() { ... }
+static int min(int first) { ... }
+static int min(int first, int second) { ... }
+static int min(int first, int second, int third) { ... }
+static int min(int first, int second, int third, int... otherArgs) { ... }
+----
+
+
+=== Item 54: Why returning empty collections instead of `null`?
+
+Core returning null on empty result is complicated to be handled by client.
+
+[source,java]
+----
+List<Cheese> cheeses = shop.getCheeses();
+if(chesees != null && chesees.contains(Cheese.STILON)) {
+  System.out.println("Jolly good");
+}
+----
+
+Use rather the empty collection everytime to not force the null check.
+
+[source,java]
+----
+// the right way to return a possibly empty collection
+public List<Cheese> getCheeses() {
+  new ArrayList<>(cheesesInStock);
+}
+
+public Cheese[] getCheeses() {
+  return cheesesInStock.toArray(new Cheese[0]);
+}
+
+// NOTE: don't do this, preallocating the array harms the performance (Shipilev16)
+return cheesesInStock.toArray(new Cheeses[cheesesInStock.size()]);
+----
+
+
+=== Item 55: when to consider to return `Optional`?
+
+"Returning" an exception (by being thrown) should be reserved to exceptional (only!)
+conditions. Otherwise an empty value on return could  be signalized by returning `null`.
+But using `null` needs a special handling by client, when forgotten then runtime(!) `NullPointerException`
+happens.
+
+From Java 8 there is the `Optional<T>` type which makes possible to announce
+to the caller that the method could not be capable to return a value - it returns empty one.
+The `Optional<T>` is an immutable container that can hold a single non-null `T` reference
+or nothing.
+
+NOTE: `Optional` does not implement `Collection` interface but in theory it could.
+
+`Optional` should be used everywhere when is useful for design of the API
+but still be aware it has got some performance hit.
+The `Optional` should be used when the method can't return a value
+and the client is expected to perform some special processing if no result is returned.
+
+The `Optional` can be helpfully used with `Stream`.
+
+[source,java]
+----
+public static <E extends Comparable<E>> Optional<E> max(Collection<E> c) {
+  return c.stream().max(Comparator.naturalOrder());
+}
+----
+
+Never return a `null` value from the Optional-returning method!
+
+You can use the `.orElse("value")` or `orElseThrow(MyException::new)` to use
+default value instead of the `null` being returned.
+
+The `Optional` provides some handy methods on the stream API to be used (coming with Java 9).
+
+[source,java]
+----
+// using map function and orElse on the Optional interface
+System.out.println("Parent PID: " + processHandler.parent()
+    .map(h -> String.valueOf(h.pid())).orElse("N/A"));
+
+// from Stream<Optional<T>> having the Stream<T>
+streamOfOptionals
+  .filter(Optional::isPresent)
+  .map(Optional::get);
+
+// from Java 9 this can be shorter
+streamOfOptionals.
+  .flatMap(Optional::stream);
+----
+
+* No container types (array, collections, maps, streams...) should not be
+  wrapped with `Optional`
+* It's never appropriate to used `Optional` of boxed primitive types.
+  Every time use the `OptionalInt`, `OptionalLong`, `OptionalDouble`.
+* It's normally not appropriate to use `Optional` as a key, value, or element
+  in the collections and arrays.
+
+
+=== Item 56: Why to write a doc for all exposed API elements?

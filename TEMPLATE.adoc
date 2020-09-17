@@ -1,0 +1,19 @@
+= <TITLE>
+
+:icons: font
+
+icon:bookmark[] <link to source>
+
+icon:tags[] <tag>, <tag>, <tag>
+
+== Main idea
+
+Problem::   <...>
+Solution::  <...>
+Benefit::   <...>
+
+== Details
+
+=== <ITEM I.>
+
+...
