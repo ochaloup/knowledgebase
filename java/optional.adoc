@@ -1,0 +1,83 @@
+= Best practices for using `Optional`
+
+:icons: font
+
+icon:bookmark[] https://blogs.oracle.com/javamagazine/12-recipes-for-using-the-optional-class-as-its-meant-to-be-used, \+
+                https://blogs.oracle.com/javamagazine/the-java-optional-class-11-more-recipes-for-preventing-null-pointer-exceptions
+
+icon:tags[] java, programming.language, basics, syntax
+
+== Main idea
+
+Problem::   How to use `Optional` in the code?
+Solution::  Use it only in `getters`, never in method parameters, don't use it for fields in classes.
+            Use it everywhere where it helps the design of API, don't overuse it.
+Benefit::   API is easy to use and `Optional` in getter signals to user that
+            the return value can be empty and needs to be handled specifically.
+
+== Details
+
+The `Optional<T>` is a design tool for better API design and for making less `NullPointerException` happening.
+From the Java language perspective it's an immutable container that contains
+a non-null reference of `T` or nothing.
+
+There is a set of points - recipes - to follow when using the `Optional`
+for benefit of API and the client using the API and the code.
+
+* `Optional` variable (return value) may never contain `null`
+* Calling `Optional.get()` directly is not way to use.
+  There is need to ensure the `Optional` is non-empty
+  - `Optional.isPresent() ? Optional.get() : <something else>`
+* When working with `Optional` don't use directly, use `orElse(null)`
+* On returning the `Optional` value don't use `if Optional.isPresent() then return Optional.get() else default`
+  but just `return Optional.orElse(default)`
+* An important note is that `orElse(default)` is always evaluated. The `default` expression
+  is evaluated regardless the `Optional` is non-empty.
+* Use `orElseGet(Supplier<? extends T> supplier)` to get better performance
+  as `Supplier` should be evaluaed only when `Optional` is(!) non-empty.
+* When the record does not exist consider throwing an exception.
+  There is `orElseThrow` which may define a "factory" for the thrown exception `status.orElseThrow(NotFoundException::new)`
+* From Java 9 there is a way to handle `Optional` as client with
+  `ifPresentOrElse(rec -> log.debug("Record: {}", rec), () -> log.debug("No record"))`
+* For returning some other `Optional` variable there could be used
+  `or (Supplier<? extends Optional<? extends T>> supplier)`, like
+  `return foundStatus.or(() -> defaultJobStatus)`
+* Don't use `Optional` as parameter to methods (like `setters`) and not at constructor
+  and not as class field and not wrap the `Collection`.
+  Almost always there is reason to use `Optional` only as a return value.
+  For method parameters and `Collection` use just checks for null and empty collection as return value.
++
+[source,java]
+----
+List<Employee> searchEmployee0(
+  List<Employee> employees, String name, String department) {
+
+  Objects.requireNonNull(employees, "Employees can't be null.");
+  Objects.requireNonNull(name, "Name can't be null.");
+  final var departmentFilter = Objects.requireNonNullElse(department, ".*");
+
+  return employees.stream()
+    .filter(employee -> employee.getName().matches(name))
+    .filter(employee -> employee.getDepartment().matches(departmentFilter))
+    .collect(toList());
+}
+----
++
+* Use `filter()` method to filter a wrapped value
++
+[source,java]
+----
+getAccount(id).filter(account -> account.isOverdraftAllowed())
+  .ifPresentOrElse(
+      account -> {  updateAccount(account); },
+      () -> { throw new IllegalStateException("Overdraft not allowed."); }
+  );
+----
++
+* `map()` on `Optional` means that the value exists and the function of map does not return `null`,
+  `flatMap()` is the same as `map` but it's capable to unwrapped the `Optional` which is returned from the function used.
+  Let's say we have `employeeRegistry.getEmployee(id).map(Employee::getAddress)`
+  vs. `employeeRegistry.getEmployee(id).flatMap(Employee::getAddress)`.
+  When `Employee::getAddress` returns optional then `flatMap` needs to be used.
+* Never use the `==` to compare two `Optional` instances. Use `equals` that
+  forward the comparison to the wrapped objects.

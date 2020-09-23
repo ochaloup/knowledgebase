@@ -1,0 +1,60 @@
+= Effective Java (chapter 9)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 9: General Programming
+
+Problem: the nuts and bolts of the language
+
+=== Item 57: Why to minimize scope of local variables?
+
+To defend yourself to dumb mistakes, to make the work of GC easier.
+As the best strategy declare the local variable where it is first used.
+
+Example of bug
+
+[source,java]
+----
+Iterator<Element> i = c.iterator();
+while(i.hasNext()) {
+  doSomething(i.next());
+}
+
+Iterator<Element> i2 = c2.iterator();
+while(i.hasNext()) { // BUG here!
+  doSomething(i2.next());
+}
+----
+
+
+=== Item 58: Why to prefere `for-each` loops?
+
+The iterator and the index variables are both just clutter.
+There could be a typo easily in the standard loop
+as the iterator occurs four times when the loop is constructed.
+
+[source,java]
+----
+// preferred idiom for iterating over collection
+// the ':' is read as "in" aka "for each element e in elements"
+for (Element e: elements) {
+  doSomething(e);
+}
+----
+
+Three common situations where `for-each` loop can't be used
+
+* destructive filtering - for deletion the is need to call `iterator.remove()`,
+  alternative is to use the
+  https://docs.oracle.com/javase/8/docs/api/java/util/Collection.html#removeIf-java.util.function.Predicate-[`Collection#removeIf`]
+  method added in Java 8.
+* transforming - list traversal with replacing some or all of the values of its elements,
+  then iterator or index is needed
+* parallel iteration - to traverse multiple collections in parallel then explicit control is needed
+
+NOTE: Any type that represents a group of elements should be considered to implement interface `Iterable`.
+      (it's not necessary to be a `Collection`).
