@@ -1,0 +1,262 @@
+= Lock coarsening and loops
+
+:icons: font
+
+icon:bookmark[] https://shipilev.net/jvm/anatomy-quarks/1-lock-coarsening-for-loops/, +
+                https://www.ibm.com/developerworks/library/j-jtp10185/index.html, +
+                https://www.ibm.com/developerworks/java/library/j-jtp09275/index.html, +
+                http://fasihkhatib.com/2018/05/20/JVM-JIT-Loop-Unrolling/
+
+icon:tags[] jvm, performance, locks
+
+== Main idea
+
+Problem::   Lock coarsening optimization effectively merges several adjacent locking blocks. How does it behave for loops?
+Solution::  Lock coarsening does not work on the entire loop, another loop optimization — loop unrolling
+            — sets up the stage for the regular lock coarsening.
+Benefit::   Lock coarsening optimization does not work directly on loops
+            but with help of the loop unrolling the lock in loops are coarsened.
+
+== Details
+
+=== Uncontended vs. contended synchronization?
+
+Locks that are mostly contended are the "hot" locks in an application,
+such as the locks that guard the shared work queue for a thread pool.
+
+Mostly uncontended locks are those that guard data that is not accessed so frequently,
+so that most of the time when a thread goes to acquire the lock,
+no other thread is holding that lock.
+
+Most locks are not frequently contended.
+
+=== What is escape analysis?
+
+JVMs can use a technique called escape analysis,
+by which they can tell that certain objects remain confined to a single thread for their entire lifetime,
+and that lifetime is bounded by the lifetime of a given stack frame.
+Such objects can be safely allocated on the stack instead of the heap.
+Even better, for small objects, the JVM can optimize away the allocation entirely
+and simply hoist the object's fields into registers.
+
+Objects referenced by local variables and that never escape from their defining scope
+meet this test -- if an object is confined to the stack of some thread,
+no other thread can ever see a reference to that object.
+(The only way an object can be shared across threads is if a reference to
+ it is published to the heap.)
+
+=== What is lock elision?
+
+When escape analysis finds that the lock can't escape out of the local scope
+of the current thread then the compiler may remove the lock from the code
+(e.g. removing the synchronization block completely).
+
+[source,java]
+----
+// using a thred-local object as a lock
+// escape analyzis - compiler may remove the synchronization
+synchronized (new Object()) {
+    doSomething();
+}
+
+
+// candidate for lock elision
+// the Vector is normally synchronized on any `add` method
+// but the Vector will be allocated on the stack, won't be shared to other thread
+// (aka it's thread local) and the synchronization calls may be removed during compilation
+// from all the Vector modification calls here
+public String getStoogeNames() {
+     Vector v = new Vector();
+     v.add("Moe");
+     v.add("Larry");
+     v.add("Curly");
+     return v.toString();
+}
+----
+
+=== What is the adaptive locking?
+
+The JVM adaptively choose between spinning and suspension of a thread.
+
+When two threads contend for a lock then JVM may either use a spin lock which waits
+until the lock is free. This could appear ineffective at first but that's not right.
+
+[source,java]
+----
+while (lockStillInUse)
+  ;
+----
+
+or suspend the thread. Suspension of thread means overhead of rescheduling the thread
+which requires JVM, operating system and HW to do the work.
+
+The lock spinning is better for short period locks.
+The thread suspension is better for locks held for a long time.
+
+The JVM may adaptively decide on the behaviour of past acquires
+if the first or the second is used.
+
+=== What is lock coarsening?
+
+Lock coarsening is the process of merging adjacent synchronized blocks
+that use the same lock object.
+
+If the compiler is not able to eliminate lock using lock elision,
+it may reduce the overhead by using lock coarsening.
+
+[source,java]
+----
+// Candidate for lock coarsening
+public void addStooges(Vector v) {
+     v.add("Moe");
+     v.add("Larry");
+     v.add("Curly");
+}
+----
+
+The compiler don't need to lock on entering the method `Vector.add`
+and then unlock on the exit of the method. It may merge the synchronized blocks
+to the bigger one. There is one lock held for all three subsequent `add` methods
+and then released at the end of the `adStooges` method.
+
+Lock coarsening may entail a trade-off between performance and responsiveness
+(responsiveness is lower as the one lock is held for the longer time).
+Heuristics are used to make a reasonable trade-off here.
+
+=== What is loop unswitching?
+
+It's a compiler optimization which moves a conditional inside a loop outside.
+It cause a duplication of code but it can improve parallelization
+as modern processors can operate quickly on vectors.
+
+[source, C]
+----
+// C code
+int i, w, x[1000], y[1000];
+for (i = 0; i < 1000; i++) {
+  x[i] += y[i];
+  if (w)
+    y[i] = 0;
+}
+
+// loop unswitching doubles the amount of code written
+int i, w, x[1000], y[1000];
+if (w) {
+  for (i = 0; i < 1000; i++) {
+    x[i] += y[i];
+    y[i] = 0;
+  }
+} else {
+  for (i = 0; i < 1000; i++) {
+    x[i] += y[i];
+  }
+}
+----
+
+=== What is loop unrolling?
+
+Loop unrolling, a standard compiler optimization that enables faster loop execution.
+Loop unrolling increases the loop body size while simultaneously decreasing
+the number of iterations.
+
+The size of the loop has increased because of calling method `S` once per iteration,
+we call it 4 times.
+
+[source,java]
+----
+// from code
+for(int i = 0; i < N; i++) {
+    S(i);
+}
+
+// optimize to code
+for(int i = 0; i < N; i += 4) {
+    S(i);
+    S(i+1);
+    S(i+2);
+    S(i+3);
+}
+----
+
+By increasing the stride of the loop,
+we’re reducing the number of jumps that the CPU has to make.
+
+The loop unrolling may enable vectorization.
+
+There are couple of flags in JVM to control the unrolling.
+The `-XX:LoopUnrollLimit` and `-XX:+UseSuperWord`.
+`LoopUnrollLimit` controls how many times your loop will be unrolled
+and `UseSuperWord` controls the transformation of scalar
+operations into vectorized operations.
+
+=== What is vectorization?
+
+There are certain CPU instructions which are capable of operating on multiple data
+elements simultaneously. Such instructions are called _SIMD_ instructions
+— _Single Instruction Multiple Data_ or _vectorized instructions_.
+
+`Auto-vectorization` is when the compiler converts the scalar instructions
+(which operate on a single data element at a time)
+to vector instructions (which operate on multiple data elements at a time)
+without any effort on the part of the programmer.
+
+Vectorizing the code enables superword level parallelism (_SLP_).
+_SLP_ is a type of _SIMD_ parallelism in which source and result operands
+are packed in a storage location.
+
+Ie. from the example above, all 4 elements may be packed into a single register
+and then moved to their memory location with `vmovdqu`.
+This results in faster processing by saving jumps and clock cycles.
+
+=== What is biased locking?
+
+Biased locking lowers the cost of /uncontended/ synchronization.
+
+Without biased locking: a thread needs to set and clear a lock bit
+when it performs repeated synchronizations on the same object. It also
+needs to wait for those set/clear writes to be drained to local cache
+before proceeding to execute further memory operations.
+
+  With biased locking: the first time a thread synchronizes on an object
+it does a bit more work to acquire ownership of the synchronized
+object ('bias' it to the thread). Subsequent synchronizations proceed
+via a simple read test with no need to  drain to cache.
+
+Well, if a biased lock is contended then
+there is more work to do to bias and unbias the lock.
+However, it is known that many synchronized operations are uncontended.
+
+Biasing can be big win when a potentially concurrent data structure is
+actually used sequentially.
+
+It's expected to be removed from JVM (proposal in JDK 15)
+as the JVM code is pretty difficult to maintain with new JDK features.
+
+=== What about lock coarsening and loops?
+
+May be this
+
+[source,java]
+----
+for (...) {
+  synchronized (obj) {
+    // something
+  }
+}
+----
+
+optimized into this?
+
+[source,java]
+----
+synchronized (this) {
+  for (...) {
+     // something
+  }
+}
+----
+
+Not exactly. What happens is that the JVM is not capable to coarsening the whole
+loop over the lock. But if the loop unrolling is used then it unroll
+the inner calls to multiple following calls. Those calls - unrolled ones
+- will be coarsened.
