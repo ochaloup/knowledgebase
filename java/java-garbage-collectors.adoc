@@ -34,7 +34,7 @@ Plus:
 Cons:
 
 * CPU for tracking the active memory areas is needed
-* Can't be that effective as proper manual memory allocation/deallocation
+* Can't be that effective as proper manual memory allocation/de-allocation
 * Some GC may need to stop the application for a while to properly manage the garbage collection (stop the world issues)
 
 === How the process of garbage collection works?
@@ -51,10 +51,10 @@ The allocation work is easier in non-fragmented memory (easy to search for a spa
 
 There are several implementations of the garbage collectors in Java.
 
-Every implementation balances the trade-off of 'pause time vs throughput'.
+Every implementation balances the trade-off of 'pause time (latency) vs throughput'.
 Shorter pause time means more CPU time is needed for GC to work in parallel with the application
 program and the app program has not so many CPU cycles for its work.
-On the other hand the application throughput means CPU is used in application
+On the other hand the better application throughput means CPU is used in application
 but then there is more work for GC when necessary and the program is usually stopped for a longer time.
 
 The other GC trade-off is the 'performance vs. memory footprint'.
