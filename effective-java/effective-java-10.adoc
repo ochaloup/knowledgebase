@@ -1,0 +1,13 @@
+= Effective Java (chapter 10)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 10: Exceptions
+
+Problem:: When to use exceptions, when used improperly.
+
+=== Item 69:

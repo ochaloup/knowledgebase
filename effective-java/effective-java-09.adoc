@@ -192,3 +192,137 @@ requires time quadratic in _n_.
 
 For repeatable concatenation use `StringBuilder.append` instead.
 Use string concatenation only to combine not more than a few strings.
+
+=== Item 64: Why to refer to instances with their interfaces rather than with the objects?
+
+What is meant by this?
+
+[source,java]
+----
+// good use
+ Set<Son> sonSet = new LinkedHashSet<>();
+ // bad use
+ LinkedHashSet<Son> sonSet = new LinkedHashSet<>();
+----
+
+Good habit is using interfaces of any reference (of the variable or as a return type).
+Working with the interfaces is more flexible as changing implementation is just "easy".
+
+When is possible or only way to use an object?
+It's in case when no appropriate interface exists.
+
+=== Item 65: Why to prefer interfaces over reflection?
+
+Reflection facility `java.lang.reflect` offers a programmatic access to arbitrary
+class. The `Class` object then provide access to `Constructor`, `Method` and `Field`.
+E.g. an arbitrary method of the `Class` could be invoked with `Method.invoke`.
+
+It's sophisticated powerful facility but with many disadvantages.
+
+* you lose all benefits of compile-time type checking
+* the reflective code is clumsy and verbose
+* performance suffers
+
+There could be feasible combination of using reflective capabilities
+and standard calls. If there is no implementation during compile time but
+we there is available interface or super-class. The instance can be created reflectively
+but accessed via the interface.
+
+[source,java]
+----
+// simplified code without exceptions - instance of the `Set` interface provided as class name as first argument
+Class<? extends Set<String>> cl = (Class <? extends Set<String>>) Class.forName(args[0]);
+Constructor<? extends Set<String>> cons = cl.getDeclaredConstructor();
+Set<String> s = cons.newInstance();
+s.addAll(Arrays.asList(args).subList(1.args.length));
+----
+
+=== Item 66: Why to use native methods judiciously?
+
+Java Native Interface (JNI) allows Java program to call _native methods_.
+There are three main purpose why to do so: platform-specific facilities to be called (e.g. registries),
+existing libraries of native code (e.g. legacy ones), performance-critical parts to improve performance.
+
+The last note (performance-critical stuff) is less advisable with new versions of Java.
+There could be some reasons for it in past but nowadays Java tuned algorithms well
+and there are only a niche reasons where performance can be enhanced with native code.
+
+Disadvantages for using JNI: not safe (memory corruption errors possible), platform-dependency - less portable,
+harder to debug, GC can't track memory usage, cost of going into and out of native code,
+glue code which is hard to be read.
+
+NOTE: Java JEP 380: Foreign Linker API is a proposal to enhance the JNI access
+      to be type safe and easier to use and with better performance than JNI is.
+
+=== Item 67: When to optimize?
+
+_We should forget about small efficiencies, say about 97% of the time: premature optimization is the root of all evil._
+Donald E. Knuth
+
+
+Guidelines
+
+Strive to write a good programs rather than fast ones.::
+If a good program is not fast enough the overall design makes possible to enhance it
+with localized changes which do not break other parts of the program.
+Strive to avoid design decisions that limit performance.::
+There are design components which are hard to be changed - especially a public API,
+wire-level protocols and persistent data formats.
+Consider the performance consequences of your API design decisions.::
+ * Making a public type mutable may require a lot of needless defensive copying.
+ * Using inheritance in a public class where composition would have been appropriate
+  ties the class forever to its superclass which can place performance limits on the subclass.
+ * Using an implementation type rather than an interface in an API ties you to a specific implementation.
+It is a bad idea to warp an API to achieve good performance.::
+The performance issue may go away in a future release of the platform but the warped API
+will be with you forever.
+Measure performance before and after each attempted optimization.::
+You may be surprised by what you find. Common wisdom says that
+_programs spend 90 percent of their time in 10 percent of their code_.
+
+=== Item 68: Why to use generally accepted naming conventions?
+
+If API violates conventions of Java Language Specification (_JLS, 6.1_)
+it may be difficult to use it.
+
+Java comes with well-established set of naming conventions - typographical and grammatical.
+
+===== Typographical
+
+* Package and module names should be hierarchical with the components separated with periods.
+** Components should consist of lowercase alphabetic characters.
+** The name of package should begin with your organization's _Internet domain name_ reversed.
+** User must not create packages beginning with _java_ and _javax_ as they are used for standard platform libraries.
+** The name then consists from components describing the package - short, descriptive, one word, acronyms are acceptable (e.g. `awt`).
+** Create package hierarchies.
+* Class and interface names include one or more words starting with a capital letter.
+** Abbreviation should be avoided - except of acronyms.
+*** Discussion about use of uppercase acronyms or only first letter capital. Consider what you can read better `HTTPURL` vs. `HttpUrl`.
+    The argument of only first letter is that you can still tell where the word/acronym starts and ends.
+* Method and fields comes with the same conventions as class except they start with lowercase first letter.
+** if acronym is used as first word of the field it should be still lowercase
+* Constant fields are uppercase as whole word separated by the underscore character.
+** A constant field is a `static final` whole value is immutable.
+* Local variable names have the similar naming convention except that abbreviation is permitted.
+* Type parameter names usually consists of a single letter (as the `V` in `Map<K,V>`).
+** Most commonly `T` for an arbitrary type, `E` for the element time of a collection,
+   `K` and `V` for the key and value types of map, `X` for an exception, `R` for return type.
+** Sequence of arbitrary types could be `T`,`U`,`V` or `T1`,`T2`,`T3`.
+
+===== Grammatical
+
+* More flexible.
+* Instantiable classes are generally named with a singular noun our noun phrase - e.g. `PriorityQueue`, `ChessPiece`.
+* Non-instantiable classes are often named with a plural noun - e.g. `Collectors`.
+* Interfaces are named like classes `Collection` or with adjective naming `able/idle` - e.g. `Runnable`.
+* Annotation types have many uses - no part of speech predominates (nouns, verbs, prepositions, adjectives - all possible)
+* Methods performing some action are name with a verb or verb phrase - e.g. `append`, `drawImage`
+* Methods returning boolean usually begin with `is` (less commonly with `has`) - e.g. `isEnabled`, `hasSiblings`
+* Methods returning non-boolean value usually begin with `get` - e.g. `getTime`
+* If methods obtain the same value and define it then it's used two named as `set_Attribute_`/`get_Attribute_`
+* Instance methods that convert a type are often called `to_Type_`  - e.g. `toString`, `toArray`
+* Methods which return a _view_ are often called `as_Type_` - e.g. `asList`
+* Methods which return primitive of the same type is often caled `_type_Value` - e.g. `intValue`
+* Common names for static factories include `from`,`of`,`valueOf`,`instance`,`getInstance`,`newInstance`,`get_Type_`,`new_Type_`
+* Fields of type boolean often does not contains `is` - e.g. `initialized`, `composite`
+* Fields are usually named with nouns or noun phrases - e.g. `height`, `digits`, `bodyStyle`
