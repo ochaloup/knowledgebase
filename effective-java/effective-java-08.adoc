@@ -8,8 +8,8 @@ icon:tags[] java, programming.language, tips
 
 == Chapter 8: Methods
 
-Problem: What are the aspects to design a method - how to treat parameters
-         and return values, how to design method signature, how to document a method?
+Problem::  What are the aspects to design a method - how to treat parameters
+           and return values, how to design method signature, how to document a method?
 
 === Item 49: Why to check input parameters for validity?
 

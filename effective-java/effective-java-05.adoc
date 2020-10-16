@@ -8,7 +8,7 @@ icon:tags[] java, programming.language, tips
 
 == Chapter 5: Generics
 
-Problem:   What are the best practices when writing the Java program?
+Problem::  What are the best practices when writing the Java program?
            Why using generics (instead of raw types) means safer program? What are specifics of using generics in Java?
 
 === Item 26: Why not to use the raw types?

@@ -8,7 +8,7 @@ icon:tags[] java, programming.language, tips
 
 == Chapter 4: Classes and Interfaces
 
-Problem:   What are the best practices when writing the Java program?
+Problem::  What are the best practices when writing the Java program?
            How to write usable, robust and flexible classes and interfaces?
 
 

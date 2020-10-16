@@ -8,11 +8,11 @@ icon:tags[] java, programming.language, tips
 
 == Chapter 7: Lamda and Streams
 
-Problem: How to make a function objects in Java?
-         The functional interfaces, lamdas and method references
-         were added to Java to help here. The stream API was added
-         to add support of these to libraries.
-         How to make best use of them?
+Problem::  How to make a function objects in Java?
+           The functional interfaces, lamdas and method references
+           were added to Java to help here. The stream API was added
+           to add support of these to libraries.
+           How to make best use of them?
 
 === Item 42: why to prefer lamdas over anynymous classes?
 

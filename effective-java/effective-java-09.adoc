@@ -8,7 +8,7 @@ icon:tags[] java, programming.language, tips
 
 == Chapter 9: General Programming
 
-Problem: the nuts and bolts of the language
+Problem::  The nuts and bolts of the language.
 
 === Item 57: Why to minimize scope of local variables?
 

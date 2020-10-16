@@ -8,7 +8,7 @@ icon:tags[] java, programming.language, tips
 
 == Chapter 3: Methods common to all Objects
 
-Problem:   What are the best practices when writing the Java program?
+Problem::  What are the best practices when writing the Java program?
            What contracts shares all java Objects as they are inheritted from `Object`
            class and they may work with its nonfinal methods (`equals`,`hashCode`,`toString`,`clone`,`finalize`)?
 

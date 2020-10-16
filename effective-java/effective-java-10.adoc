@@ -8,6 +8,6 @@ icon:tags[] java, programming.language, tips
 
 == Chapter 10: Exceptions
 
-Problem:: When to use exceptions, when used improperly.
+Problem::  When to use exceptions, when used improperly.
 
 === Item 69:
