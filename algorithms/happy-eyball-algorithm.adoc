@@ -18,7 +18,7 @@ Let's having a problem of downloading content from a remote web.
 We may have a several DNS servers to lookup. We want to get the DNS answer fast enough
 but we don't want to query DNS all in parallel as it's resource intensive.
 
-image::images/happy-eyballs-algorithm.png[]
+image::../images/happy-eyballs-algorithm.png[]
 
 An easy solution is use of the _happy eyball algorithm_. It runs the queries
 one by one with defined timeout. When the query does not finish it starts a new one

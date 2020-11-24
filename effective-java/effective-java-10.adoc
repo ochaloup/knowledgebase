@@ -10,4 +10,199 @@ icon:tags[] java, programming.language, tips
 
 Problem::  When to use exceptions, when used improperly.
 
-=== Item 69:
+=== Item 69: Why to use exceptions only for exceptional state?
+
+[source,java]
+----
+// don't do this
+try {
+  int = 0;
+  while(true) {
+    range[i++].climb();
+  }
+} catch (ArrayIndexOUtOfBoundsException e) {}
+----
+
+* exceptions are designed for exceptional circumstances, the JVM implementators
+  won't make them work as fast as explicit tests
+* placing a code under `try-catch` block inhibits certain JVM optimizations
+* standard idiom for looping doesn't necessarily result in redundant checks,
+  JVM may optimize them
+* exceptions are slower and non-standard usage obfuscate the code
+* a well-designed API must not force its clients to use exceptions for ordinary control flow
+
+
+=== Item 70: When to use checked exception and when the runtime exception?
+
+Java provides three types of exceptions: `checked exceptions`, `runtime exceptions`,
+`errors`.
+The `runtime exceptions` and `errors` are both of group `unchecked exceptions`.
+
+Decision cannot be clear but there are some guidance that could be used.
+
+* use checked exceptions for conditions from which the caller can reasonably
+  be expected to recover
+* use runtime exception to indicate programming errors
+
+NOTE: if a program does not catch the unchecked exception the current thread halts
+
+* The great portion of usage of runtime exceptions indicate _precondition violations_.
+
+The `errors` are by convention reserved for JVM to indicate resource deficiencies,
+invariant failures or othe conditions which makes impossible for program to continue.
+The `errors` are exception sublcasses from `Error`. The best is not to implement
+such an exception.
+
+For throwing the unchecked exception use the `runtime exceptions` which is
+a subclass of `RuntimeException`.
+
+There is the only exception of `AssertionError` that are used in some cases.
+
+NOTE: it's possible to implement an exception as direct implementation of `Throwable`,
+      ie. neither a subclass of `Exception`, nor `RuntimeException`, nor `Error`.
+      JLS (java language spec) should handle such an exceptio as ordinary checked one.
+      Don't do this.
+
+
+=== Item 71: Why to avoid unnecessary use of checked exceptions?
+
+Overusing the checked exception makes the API harder to use - the caller needs
+  to use `try-catch` or propagate the exception outward and
+  such method cannot be use directly in streams.
+
+The burden may be justified if the exceptional condition cannot be prevented
+by proper use of the API and the programmer using the API can take some useful
+action.
+
+To eliminate use of the checked exception could be usage of `Optional`.
+The checked exception could be hanged for unchecked.
+
+Sparingly used checked exceptions can increase the readability of program.
+Overusing them complicate the program on the other hand.
+
+
+=== Item 72: Why to use standard exceptions over the own ones?
+
+High degree of code reuse distinguishes expert programmers from less experienced ones.
+
+Reusing the standard exceptions make the API easier to read, learn and use.
+Less exception classes means less memory footprint when the program is loaded.
+
+.Commonly used exceptions
+|===
+|Exception |Description
+
+|`IllegalArgumentException`
+|A caller passes in an argument whose value is inappropriate.
+
+|`IllegalStateException`
+|The invocation is illegal because of the state of the receiving object.
+
+|`NullPointerException`
+|The argument was `null` when the null value is prohibited.
+
+|`IndexOutOfBoundsException`
+|An out-of-range value in a parameter representing an index into a sequence.
+
+|`ConcurrentModificationException`
+|An object which was designed for use by a single thread was detected to be used concurrently.
+
+|`ConcurrentModificationException`
+|An object which was designed for use by a single thread was detected to be used concurrently.
+
+|`UnsupportedOperationException`
+|Object does not support the method. Used when inherited a method signature
+ but the subclass can't implement it.
+|===
+
+Do not reuse `Exception`, `RuntimeException`, `Throwable`, or `Error` directly.
+Threat them as `abstract` and use subclasses of these.
+
+
+=== Item 73: Why to wrap internal exceptions?
+
+Higher layers of the program should catch lower-level exceptions and, in their place,
+throw exceptions that can be explained in terms of the higher-level abstraction.
+
+When not done so the lower level transactions pollutes the API and makes
+troubles when the lower level changes in the later releases.
+
+The higher level exception may chain the lower level exception as _a cause_
+(`Throwable`'s `getCause` method).
+
+.exception translation idiom with exception chaining
+[source,java]
+----
+try {
+  ... /// Use low-level abstraction
+} catch (LowerLevelException lle) {
+  throw new HigherLevelException(lle);
+}
+----
+
+The exception translation is superior to throwing up the lower-level exceptions
+it should not be overused and the best is handle the exception.
+
+
+=== Item 74: Why to document all the exceptions thrown?
+
+The exceptions are part of the behaviour and the API thus
+it's important to document them.
+
+For checked exceptions document the conditions under which each one is thrown
+using javadoc `@throws`.
+
+The unchecked exceptions should be listed and the public API to prescribe
+its preconditions.
+
+NOTE: Document unchecked exception with `@throw` do not use the `throws` keyword
+      on unchecked exceptions.
+
+=== Item 75: Why to include failure-capture information?
+
+On program failing with an uncaught exception the system prints the exception's trace.
+There is included the exception class with detailed message (a string explanation).
+This explanation helps to understand the reason of the failure.
+
+Such message should contain the values of all parameters and fields that contributed to the exception!
+But do not include passwords, encryption keys and other sensitive information like this.
+
+=== Item 76: Why the failure data should be atomic?
+
+A failed method should leave the object in the state that it was in prior to the invocation.
+A method with this property is said to be _failure-atomic_.
+
+The simplest is to work with immutable objects.
+
+For methods that operates on a mutable object is the approach to check validity
+before performing the operation. The exception is thrown before the object is modified.
+
+Some other approaches is having a temporary copy where changes happen with.
+The temporary object replaces the content of the original one at the end of the operating method.
+Another approach is ability to roll-back the changes when failure occurs
+and proceed with the object to its state before operation started.
+
+NOTE: failure-atomicity is desirable but not always feasible
+
+
+=== Item 77: Why not ignoring exceptions?
+
+Because it means ignoring a fire alarm. Consequences are evident.
+
+But, there are some situations where it's appropriate the exception.
+E.g. when closing a `FileInputStrem` when everything was read. Then such failure
+makes no trouble for business logic. Still it's better to print the error
+to `debug` for later investigation.
+
+If it should be totally ignored then variable should be named *ignored*.
+
+[source,java]
+----
+Future<Integer> exec.submit(planarMap::chromaticNumber);
+int numColors = 4; //default, sufficient for any map
+try {
+  numColors = f.get(1L, TimeUnit.Seconds);
+} catch (TimeoutException | ExecutionException ignored) {
+  // use default: minimal coloring is desirable, not required
+}
+----

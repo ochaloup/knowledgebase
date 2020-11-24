@@ -1,0 +1,61 @@
+= Effective Java (chapter 11)
+
+:icons: font
+
+icon:bookmark[] https://www.amazon.com/Effective-Java-Joshua-Bloch-ebook/dp/B078H61SCH
+
+icon:tags[] java, programming.language, tips
+
+== Chapter 11: Concurrency
+
+Problem::  How to write clear, correct and well-documented concurrent programs?
+
+=== Item 78: Why shared data needs to be synchronized?
+
+The `synchronized` keyword ensures that only a single thread can execute
+a method or block at one time.
+
+Synchronization is important not only for ensuring mutual exclusion
+but it arranges reliable communication between threads as well
+(defined in spec in part _memory model_).
+
+The synchronization ensures that any data written by another thread to the shared variable
+before entering to the synchronized block will be visible in the block.
+If `synchronized` or `volatile` are not used the JVM may utilize either some
+optimization (which makes e.g. reorder the instruction)
+or the changes could not be flushed to the main memory and may be left stale in the CPU caches.
+
+[source,java]
+----
+while(!stopRequested)
+  i++;
+
+synchronized boolean stopRequested() {
+  return stopRequested;
+}
+synchronized void requestStop() {
+  stopRequested = true;
+}
+
+// -- or --
+// need to do either
+volatile stopRequested;
+----
+
+NOTE: synchronization is not guaranteed to work unless both read and write operations are synchronized
+
+The following example with `volatile` is broken. The operator `++` is not atomic.
+It's first reading the value and then writing. There could be returned the same
+numbers to two different threads. Synchronization would be needed here.
+Or using the `java.util.concurrent.atomic`.
+
+[source,java]
+----
+volatile int nextNumber = 0;
+
+int getNextNumber() {
+  return nextNumber++;
+}
+----
+
+=== Item 79: Why to avoid excessive synchronization?

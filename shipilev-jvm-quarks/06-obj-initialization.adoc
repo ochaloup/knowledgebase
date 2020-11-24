@@ -1,0 +1,96 @@
+= New Object Stages - system and user ones
+
+:icons: font
+
+icon:bookmark[] https://shipilev.net/jvm/anatomy-quarks/6-new-object-stages/
+
+icon:tags[] jvm, gc
+
+== Main idea
+
+Problem::   On `Object` creation the JVM requires system and user initialization.
+Benefit::   JVM tricks may make this "faster" to coalesce both of them under one stage
+            where the performance is then close to C which does do only the user object initialization
+            (C skips the system initialization as there is no contract of the default shape as JDK spec defines).
+
+== Details
+
+=== What are phases of a new object initialization?
+
+. *Allocation*: Finding part of process memory space to get for instance.
+. *System initialization*: Java requires the `new`-ly allocated `Object` being initialized
+  (in contrast to e.g. C which requires no initialization of a new object).
+  The initialization sets default values, verification to see all headers intact etc.
+. *Secondary (user) initialization*: instance intializers and constructors associated
+  with the object type.
+
+=== What is the bytecode generated during intialization?
+
+[source,java]
+----
+public Object t() {
+  return new Object();
+}
+----
+
+the bytecode looks like
+
+[source,java]
+----
+public java.lang.Object t();
+  descriptor: ()Ljava/lang/Object;
+  flags: (0x0001) ACC_PUBLIC
+  Code:
+    stack=2, locals=1, args_size=1
+       0: new           #4           // class java/lang/Object
+       3: dup
+       4: invokespecial #1           // Method java/lang/Object."<init>":()V
+       7: areturn
+----
+
+The JVM optimization then may work on this and omit the separate
+system and user initialization and merge them together.
+
+[source,java]
+----
+static class Init {
+    private int x;
+    public Init(int x) {
+        this.x = x;
+    }
+}
+
+return new Init(42);
+----
+
+can be without optimization (no intlining etc.)
+
+[source,asm]
+----
+; ------- system init ---------
+0x00007fc69571bf69: movq   $0x1,(%rax)              ; put mark word header
+0x00007fc69571bf70: movl   $0xf8021bc4,0x8(%rax)    ; put class word header
+0x00007fc69571bf77: mov    %r12d,0xc(%rax)          ; x = 0 (%r12 happens to hold 0)
+; ------- /system init --------
+; -------- user init ----------
+0x00007fc69571bf7b: mov    %rax,%rbp
+0x00007fc69571bf7e: mov    %rbp,%rsi
+0x00007fc69571bf81: xchg   %ax,%ax
+0x00007fc69571bf88: movl   $0x2a,0xc(%rbp)          ; x = 42
+; ------ /user init ------
+----
+
+then coalescing system+user initialization could be like this
+
+[source,asm]
+----
+; ------- system init ---------
+0x00007efdc466d4e9: movq   $0x1,(%rax)              ; put mark word header
+0x00007efdc466d4f0: movl   $0xf8021bc4,0x8(%rax)    ; put class word header
+; ...... system/user init .....
+0x00007efdc466d4f7: movl   $0x2a,0xc(%rax)          ; x = 42.
+; -------- /user init ---------
+----
+
+NOTE: the code here omits the memory TLAB allocation. For whole example see
+      https://shipilev.net/jvm/anatomy-quarks/6-new-object-stages/

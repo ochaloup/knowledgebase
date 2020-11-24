@@ -88,3 +88,5 @@ processors then CPU will be higher as the time adds up.
 
 It only allocates data and never releases them. It's an artificial test
 which shows some overhead of the GC processing  itself.
+It does not show real processing of memory deallocation. The test only allocates
+and allocates and GC scans the memory which can't be deallocated.

@@ -125,14 +125,61 @@ Launched 09/2019
 
 === What is new in Java 14?
 
+Launched 03/2020
+
 * Java Flight Recorder adding an API to streaming events
   (usually with Java Agent to subscribe to the events and then it's possible to process it and/or send it somewhere)
 * `switch expressions` are permanent (not only tech preview)
 * couple of tweaks for `text blocks`, e.g. we can use `"""` and inside of it then `\` means not starting a new line
-* pattern matching for `instanceof`, is not necessary to typing it explicitly wiht `(Group) group`, ie. `if (obj instanceof Group group) var entries = group.getEntries();`
+* pattern matching for `instanceof`, is not necessary to typing it explicitly with `(Group) group`, ie. `if (obj instanceof Group group) var entries = group.getEntries();`
 * `records` (see notes at `java-records-sealed-types.adoc`)
 * helpful `NullPointerException` which prints detailed info on NPE (needed to be switched on with `-XX:+ShowCodeDetailsInExceptionMessages`)
 
+=== What is new in Java 15?
+
+Launched 09/2020
+
+* `Edwards-Curve Digital Signature Algorithm` (EdDSA)
+* `Hidden Classes` - classes that cannot be used directly by the bytecode of other classes,
+  they are intended for use by frameworks that dynamically generate classes at runtime
+  and use them indirectly via reflection. Expected they are needed for limited time
+  so retaining them for the lifetime of the statically generated class might unncessarily
+  increase the memory footprint. They are nondiscoverable.
+  It's replacement for `sun.misc.Unsafe::defineAnonymousClass`.
+* `Text blocks` continue to evolve. Now the `\` at the end of line suppresses the insertion
+  of the newline character. `\s` prevents stripping of trailing white spaces.
++
+[source,java]
+----
+String colors = """
+  red  \s
+  green
+  my \
+  colour
+""";
+----
++
+* `ZGC` to be official non-experimental JDK feature.
+  ZGC is a concurrent, NUMA-aware, scalable low-latency garbage collector,
+  geared to deliver garbage-collection pauses of less than 10 milliseconds
+* reimplementation of `DatagramSocket API`
+* preview of `sealed classes` coming from project Amber. Sealed classes and interfaces
+  restrict which other classes or interfaces may extend or implement them.
++
+[source,java]
+----
+public sealed class Shape permits com.example.polar.Circle, com.example.quad.Rectangle { ... }
+----
++
+* second preview of `pattern matching for instanceof`
+* second preview of `records`.
+  The record classes are an object-oriented construct that expresses a simple aggregation of values.
+  Records automatically implement data-driven methods such as the equals method and accessor methods, etc.
+* incubator release of the `Foreign-Memory Access API` which let Java efficiently access
+  memory outside of the Java heap.
+  To replace `java.nio.ByteBuffer` and `sun.misc.Unsafe`.
+* Deprecation: Nashorn JavaScript engine, Disable and Deprecate Biased Locking,
+  Remove the Solaris and SPARC Ports, Deprecate RMI Activation for Removal
 
 === JDK "future" projects
 
